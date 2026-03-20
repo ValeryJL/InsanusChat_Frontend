@@ -1,63 +1,34 @@
-# .gitignore para proyecto React (Node.js)
-# Ignora dependencias, artefactos de build, archivos de entorno y caches
-
-# Node
-node_modules/
+# Logs
+logs
+*.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
-# Build / distribución
-build/
+# Dependencies & Frontend build
+node_modules/
 dist/
-out/
-public/build/
-.vite/
-.parcel-cache/
-.cache/
-.next/       # por si se usa Next.js en parte del proyecto
-.storybook-static/
+dist-ssr/
+*.local
 
-# Entornos y secretos (mantener .env.example en el repo si existe)
-.env
-.env.*.local
-!.env.example
+# Tauri & Rust artifacts
+src-tauri/target/
+src-tauri/gen/
+src-tauri/binaries/insanus-workstation-daemon-*
+src-tauri/resources/insanuschat-harness/
 
-# Cachés y reportes de pruebas / cobertura
-coverage/
-.nyc_output/
-jest-cache/
-jest-results/
+# Workstation Python Sidecar local artifacts
+workstation-daemon/.venv/
+workstation-daemon/build_pyinstaller/
+workstation-daemon/.pytest_cache/
+workstation-daemon/**/__pycache__/
+workstation-daemon/*.pyc
+workstation-daemon/workstation_config.json
 
-# TypeScript
-*.tsbuildinfo
-
-# Linters / herramientas
-.eslintcache
-.stylelintcache
-
-# Editor / IDE
-.vscode/
+# Editors & OS
+.vscode/*
+!.vscode/extensions.json
 .idea/
-*.sublime-workspace
-*.sublime-project
-*.sw?
-*.iml
-
-# Sistema operativo
 .DS_Store
 Thumbs.db
-
-# Logs
-logs/
-*.log
-
-# Docker / contenedores (opcional: si usas override locales)
-docker-compose.override.yml
-
-# Otros temporales
-*.tmp
-*.temp
-*.bak
-*.orig

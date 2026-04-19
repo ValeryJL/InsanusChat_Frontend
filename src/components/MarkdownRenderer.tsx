@@ -51,7 +51,7 @@ const CodeBlock: React.FC<{ lang: string; code: string }> = ({ lang, code }) => 
   const [copied, setCopied] = useState(false);
 
   const handleCopy = () => {
-    navigator.clipboard?.writeText(code);
+    navigator.clipboard.writeText(code);
     setCopied(true);
     setTimeout(() => setCopied(false), 1800);
   };

@@ -351,7 +351,7 @@ export const EnvironmentPopover: React.FC<EnvironmentPopoverProps> = ({
                   <span>
                     {!isDesktopRuntime() && nodes.length === 0
                       ? 'Descargar Workstation Desktop'
-                      : 'Configurar...'}
+                      : 'Configuración Workstation...'}
                   </span>
                 </span>
                 <span className="text-[10px] font-mono text-zinc-500">Ctrl+,</span>

@@ -1,0 +1,75 @@
+{
+  "name": "insanuschat-harness",
+  "displayName": "InsanusChat Agent Harness & 2D Branching Tree",
+  "description": "Extensión nativa integrada en InsanusChat Workstation (VS Code / VSCodium / InsanusCode): conecta selección de código, diagnósticos LSP y estado del daemon local con InsanusChat.",
+  "version": "1.4.0",
+  "publisher": "insanustech",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "AI",
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./extension.js",
+  "contributes": {
+    "configuration": {
+      "title": "InsanusChat Workstation",
+      "properties": {
+        "insanuschat.localDaemonUrl": {
+          "type": "string",
+          "default": "http://127.0.0.1:8765",
+          "description": "URL del microservicio local InsanusChat Workstation"
+        },
+        "insanuschat.webAppUrl": {
+          "type": "string",
+          "default": "http://localhost:3000",
+          "description": "URL de la interfaz web de InsanusChat"
+        }
+      }
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "insanuschat-sidebar",
+          "title": "InsanusChat Harness",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "insanuschat-sidebar": [
+        {
+          "type": "webview",
+          "id": "insanuschat.agentView",
+          "name": "Vista de Agente & Árbol 2D"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "insanuschat.openAgentView",
+        "title": "InsanusChat: Abrir Vista de Agente (Antigravity Mode)"
+      },
+      {
+        "command": "insanuschat.sendSelectionToAgent",
+        "title": "InsanusChat: Enviar Selección al Agente y Ramificar"
+      },
+      {
+        "command": "insanuschat.sendDiagnosticsToAgent",
+        "title": "InsanusChat: Enviar Errores LSP del Archivo al Agente"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "insanuschat.sendSelectionToAgent",
+          "group": "navigation"
+        }
+      ]
+    }
+  }
+}

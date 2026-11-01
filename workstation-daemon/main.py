@@ -631,7 +631,7 @@ def main():
     cfg.bind_port = args.port
     cfg.bind_host = args.host
     _start_parent_watchdog(args.watch_stdin, args.parent_pid)
-    uvicorn.run(app, host=args.host, port=args.port, reload=False, log_level="warning")
+    uvicorn.run(app, host=args.host, port=args.port, reload=False, log_config=None)
 
 
 if __name__ == "__main__":

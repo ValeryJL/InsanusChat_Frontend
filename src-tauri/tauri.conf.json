@@ -1,0 +1,62 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "InsanusChat Workstation",
+  "version": "1.4.0",
+  "identifier": "ar.com.insanustech.insanuschat.workstation",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:5173",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "InsanusChat Workstation",
+        "width": 1380,
+        "height": 860,
+        "minWidth": 900,
+        "minHeight": 620,
+        "resizable": true,
+        "center": true,
+        "backgroundColor": "#09090b"
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self' http://tauri.localhost https://tauri.localhost tauri://localhost; script-src 'self' 'unsafe-inline' 'unsafe-eval' blob: http://tauri.localhost https://tauri.localhost tauri://localhost; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https: http:; font-src 'self' data: https:; worker-src 'self' blob:; connect-src 'self' http: https: ws: wss: ipc: http://ipc.localhost;"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis", "msi", "deb", "appimage"],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.ico",
+      "icons/icon.png"
+    ],
+    "externalBin": [
+      "binaries/insanus-workstation-daemon"
+    ],
+    "resources": [
+      "resources/insanuschat-harness/**/*"
+    ],
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser",
+        "languages": ["Spanish", "English"]
+      }
+    },
+    "linux": {
+      "deb": {
+        "depends": [
+          "libwebkit2gtk-4.1-0",
+          "libgtk-3-0",
+          "libayatana-appindicator3-1"
+        ]
+      }
+    }
+  }
+}

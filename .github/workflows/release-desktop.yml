@@ -1,0 +1,150 @@
+name: Release InsanusChat Workstation (Windows & Linux)
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Tag del release (ej. v1.4.0)'
+        required: false
+        default: 'v1.4.0'
+
+permissions:
+  contents: write
+
+jobs:
+  build-workstation:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows-latest
+            target_triple: x86_64-pc-windows-msvc
+            os_label: windows
+            bundles: nsis,msi
+          - platform: ubuntu-22.04
+            target_triple: x86_64-unknown-linux-gnu
+            os_label: linux
+            bundles: deb,appimage
+
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - name: Checkout InsanusChat_Frontend
+        uses: actions/checkout@v4
+
+      - name: Install Linux Tauri v2 System Dependencies
+        if: matrix.os_label == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            build-essential \
+            curl \
+            wget \
+            file \
+            libssl-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Setup Rust Stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo dependencies
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+
+      - name: Build & Test Workstation Local Sidecar (PyInstaller)
+        env:
+          TAURI_TARGET_TRIPLE: ${{ matrix.target_triple }}
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r workstation-daemon/requirements.txt
+          pytest -v workstation-daemon/tests/test_daemon.py
+          python workstation-daemon/build_sidecar.py
+
+      - name: Generate Obsidian Icons & Build Frontend + Offline Monaco
+        run: |
+          python scripts/generate-icons.py
+          npm install
+          npm run build
+
+      - name: Build Tauri v2 Desktop Installers (${{ matrix.bundles }})
+        run: |
+          npx tauri build --bundles ${{ matrix.bundles }}
+
+      - name: Collect Release Artifacts
+        shell: bash
+        run: |
+          mkdir -p release-artifacts
+          find src-tauri/target/release/bundle -type f \( -name "*.exe" -o -name "*.msi" -o -name "*.deb" -o -name "*.AppImage" \) -exec cp -v {} release-artifacts/ \;
+          ls -lh release-artifacts
+
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: workstation-${{ matrix.os_label }}
+          path: release-artifacts/*
+
+  publish-release:
+    needs: build-workstation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download All Built Installers
+        uses: actions/download-artifact@v4
+        with:
+          path: all-artifacts
+          merge-multiple: true
+
+      - name: Generate SHA256 Checksums
+        run: |
+          cd all-artifacts
+          sha256sum * > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Determine Release Tag
+        id: tag
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            echo "name=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+          else
+            echo "name=${{ github.event.inputs.release_tag || 'v1.4.0' }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.name }}
+          name: "InsanusChat Workstation ${{ steps.tag.outputs.name }}"
+          generate_release_notes: true
+          body: |
+            ## InsanusChat Workstation ${{ steps.tag.outputs.name }} (Windows & Linux)
+
+            Aplicación de escritorio nativa compilada con **Tauri v2** + microservicio local **VS Code / Terminal PTY** autocontenido (sin requerir Python instalado).
+
+            ### Instaladores incluidos
+            - **Windows x64**: Instalador NSIS (`*-setup.exe`) y Windows Installer (`*.msi`)
+            - **Linux x64**: Paquete Debian/Ubuntu (`*.deb`) y binario portable (`*.AppImage`)
+
+            ### Novedades principales
+            - **Backend 100% Fuente de Verdad (SSOT)**: registro persistente de equipos, políticas versionadas (`config_version`) y Kill-Switch remoto instantáneo.
+            - **Panel de Configuración estilo Google Antigravity (`Ctrl+,`)**: Control Remoto (`🔒 Solo Local` vs `🌐 Online`), Terminal Remota PTY, Guardrails Allowlist/Denylist, selector de editores VS Code/VSCodium/InsanusCode y logs en vivo del sidecar.
+            - **System Tray Nativo + Autostart**: minimizá la app a la bandeja del sistema manteniendo el Control Remoto activo con ~20 MB de RAM.
+          files: |
+            all-artifacts/*

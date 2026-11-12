@@ -1,5 +1,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    insanuschat_workstation_lib::run()
+    insanus_harnes_lib::run()
 }

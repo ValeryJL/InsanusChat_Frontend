@@ -44,7 +44,7 @@ def main():
     triple = detect_target_triple()
     is_win = platform.system().lower().startswith("win")
     ext = ".exe" if is_win else ""
-    bin_name = f"insanus-workstation-daemon-{triple}"
+    bin_name = f"insanus-harnes-daemon-{triple}"
 
     TAURI_BIN_DIR.mkdir(parents=True, exist_ok=True)
     if TAURI_RES_EXT_DIR.exists():

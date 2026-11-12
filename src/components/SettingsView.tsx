@@ -949,7 +949,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                       <input
                         value={serverUrlInput}
                         onChange={(e) => setServerUrlInput(e.target.value)}
-                        placeholder="http://localhost:8000 o https://chat.tudominio.com"
+                        placeholder="https://harnes.insanustech.com.ar"
                         className="w-full h-9 px-3 rounded-xl bg-[#09090b] border border-white/[0.09] text-xs font-mono text-zinc-100 outline-none focus:border-emerald-500/60"
                       />
                     </div>
@@ -1231,12 +1231,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                       <Download className="w-4 h-4 text-emerald-400" />
                       <span>
                         {isDesktop
-                          ? `InsanusChat Workstation v${cfg?.app_version || '1.4.0'} — Actualizaciones`
-                          : 'Descargar InsanusChat Workstation (Escritorio)'}
+                          ? `insanus-harnes v${cfg?.app_version || '1.4.1'} — Actualizaciones`
+                          : 'Descargar insanus-harnes (Escritorio)'}
                       </span>
                     </h2>
                     <p className="text-xs text-zinc-400 mt-1 leading-relaxed">
-                      Instalador todo-en-uno para <strong>Windows</strong> y <strong>Linux</strong> que incluye el Frontend Obsidian, el microservicio local adaptado para VS Code (sin requerir Python) y control de privacidad en System Tray.
+                      Instalador todo-en-uno para <strong>Windows</strong> y <strong>Linux</strong> preconfigurado para <code className="text-emerald-400">https://harnes.insanustech.com.ar</code> con el microservicio local VS Code embebido y System Tray.
                     </p>
                   </div>
                   <button

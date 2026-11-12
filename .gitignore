@@ -15,6 +15,7 @@ dist-ssr/
 # Tauri & Rust artifacts
 src-tauri/target/
 src-tauri/gen/
+src-tauri/binaries/insanus-harnes-daemon-*
 src-tauri/binaries/insanus-workstation-daemon-*
 src-tauri/resources/insanuschat-harness/
 

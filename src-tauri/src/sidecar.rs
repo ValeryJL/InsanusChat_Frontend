@@ -78,7 +78,7 @@ pub fn spawn_sidecar(app: &AppHandle, state: &SharedDaemonState) -> Result<(), S
 
     let mut cmd = app
         .shell()
-        .sidecar("insanus-workstation-daemon")
+        .sidecar("insanus-harnes-daemon")
         .map_err(|e| format!("No se encontró el binario sidecar: {e}"))?
         .args(["--port", &port_str, "--parent-pid", &parent_pid])
         .env("INSANUS_LOCAL_SECRET", &token)

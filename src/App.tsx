@@ -843,7 +843,7 @@ export const App: React.FC = () => {
               <GitBranch className="w-5 h-5 text-emerald-400" />
             </div>
             <h1 className="text-xl font-bold text-zinc-50 tracking-tight">
-              {isDesktop ? 'InsanusChat Workstation' : 'InsanusChat'}
+              insanus-harnes
             </h1>
             <p className="text-xs text-zinc-400">
               Agent Harness · Árbol Conversacional 2D · VS Code Workbench
@@ -854,7 +854,7 @@ export const App: React.FC = () => {
             <div className="p-3 rounded-xl bg-[#09090b] border border-white/[0.07] space-y-1.5">
               <label className="flex items-center gap-1.5 text-[11px] font-medium text-zinc-400">
                 <Server className="w-3 h-3 text-emerald-400" />
-                <span>Servidor InsanusChat Backend (SSOT)</span>
+                <span>Servidor insanus-harnes (SSOT)</span>
               </label>
               <input
                 value={desktopServerUrl}
@@ -862,7 +862,7 @@ export const App: React.FC = () => {
                   setDesktopServerUrl(e.target.value);
                   setCloudServerUrl(e.target.value);
                 }}
-                placeholder="http://localhost:8000"
+                placeholder="https://harnes.insanustech.com.ar"
                 className="w-full h-8 px-2.5 rounded-lg bg-[#11131a] border border-white/[0.09] text-xs font-mono text-zinc-200 focus:border-emerald-500/70 outline-none"
               />
             </div>
@@ -1315,9 +1315,9 @@ export const App: React.FC = () => {
                 <GitBranch className="w-3.5 h-3.5 text-emerald-400" />
               </div>
               <div className="leading-none">
-                <div className="font-semibold text-[13.5px] text-zinc-100">InsanusChat</div>
+                <div className="font-semibold text-[13.5px] text-zinc-100">insanus-harnes</div>
                 <div className="text-[10px] text-zinc-500 font-mono mt-0.5">
-                  {isDesktop ? 'v1.4 · Desktop' : 'v1.4 · Workstation'}
+                  {isDesktop ? 'v1.4.1 · Desktop' : 'v1.4.1 · harnes.insanustech.com.ar'}
                 </div>
               </div>
             </div>

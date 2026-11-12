@@ -1,12 +1,12 @@
 [package]
-name = "insanuschat-workstation"
-version = "1.4.0"
-description = "InsanusChat Workstation — Desktop App (Windows & Linux) con Microservicio Local VS Code y Control Remoto estilo Antigravity"
+name = "insanus-harnes"
+version = "1.4.1"
+description = "insanus-harnes — Desktop App (Windows & Linux) con Microservicio Local VS Code y Control Remoto estilo Antigravity"
 authors = ["Valeria Jauregui Lorda"]
 edition = "2021"
 
 [lib]
-name = "insanuschat_workstation_lib"
+name = "insanus_harnes_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]

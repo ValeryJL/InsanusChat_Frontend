@@ -26,8 +26,8 @@
         },
         "insanuschat.webAppUrl": {
           "type": "string",
-          "default": "http://localhost:3000",
-          "description": "URL de la interfaz web de InsanusChat"
+          "default": "https://harnes.insanustech.com.ar",
+          "description": "URL de la interfaz web de insanus-harnes"
         }
       }
     },

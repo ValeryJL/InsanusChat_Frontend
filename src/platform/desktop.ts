@@ -17,6 +17,7 @@ export interface DaemonBootstrapInfo {
 }
 
 const CLOUD_URL_STORAGE_KEY = 'insanus_cloud_server_url';
+export const DEFAULT_CLOUD_SERVER_URL = 'https://harnes.insanustech.com.ar';
 
 let cachedBootstrap: DaemonBootstrapInfo | null = null;
 let localDesktopNodeId: string | null = null;
@@ -33,7 +34,7 @@ export function getCloudServerUrl(): string {
   }
   const saved = (localStorage.getItem(CLOUD_URL_STORAGE_KEY) || '').trim().replace(/\/+$/, '');
   if (saved) return saved;
-  return envBase || 'http://localhost:8000';
+  return envBase || DEFAULT_CLOUD_SERVER_URL;
 }
 
 export function setCloudServerUrl(url: string): string {

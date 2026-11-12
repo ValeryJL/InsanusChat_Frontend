@@ -13,7 +13,7 @@ pub struct TrayUiState {
 pub type SharedTrayState = Arc<Mutex<TrayUiState>>;
 
 pub fn create_system_tray(app: &AppHandle, daemon_state: SharedDaemonState, tray_state: SharedTrayState) -> tauri::Result<()> {
-    let show_i = MenuItem::with_id(app, "show", "Abrir InsanusChat Workstation", true, None::<&str>)?;
+    let show_i = MenuItem::with_id(app, "show", "Abrir insanus-harnes", true, None::<&str>)?;
     let status_i = MenuItem::with_id(app, "status", "Estado: 🔒 Solo Local (127.0.0.1)", false, None::<&str>)?;
     let toggle_i = MenuItem::with_id(app, "toggle_remote", "🌐 Activar Control Remoto", true, None::<&str>)?;
     let vscode_i = MenuItem::with_id(app, "open_vscode", "Abrir VS Code Desktop", true, None::<&str>)?;
@@ -33,9 +33,9 @@ pub fn create_system_tray(app: &AppHandle, daemon_state: SharedDaemonState, tray
     )?;
 
     let daemon_for_menu = daemon_state.clone();
-    let mut builder = TrayIconBuilder::with_id("insanuschat-tray")
+    let mut builder = TrayIconBuilder::with_id("insanus-harnes-tray")
         .menu(&menu)
-        .tooltip("InsanusChat Workstation — 🔒 Solo Local")
+        .tooltip("insanus-harnes — 🔒 Solo Local")
         .show_menu_on_left_click(false)
         .on_menu_event(move |app_handle, event| match event.id.as_ref() {
             "show" => {
@@ -96,19 +96,19 @@ pub fn set_tray_remote_status(
         (
             "Estado: 🌐 Control Remoto Online",
             "🔒 Desactivar Control Remoto",
-            "InsanusChat Workstation — 🌐 Control Remoto Online",
+            "insanus-harnes — 🌐 Control Remoto Online",
         )
     } else if exposed {
         (
             "Estado: 🌐 Control Remoto (Conectando...)",
             "🔒 Desactivar Control Remoto",
-            "InsanusChat Workstation — 🌐 Control Remoto (Conectando...)",
+            "insanus-harnes — 🌐 Control Remoto (Conectando...)",
         )
     } else {
         (
             "Estado: 🔒 Solo Local (127.0.0.1)",
             "🌐 Activar Control Remoto",
-            "InsanusChat Workstation — 🔒 Solo Local",
+            "insanus-harnes — 🔒 Solo Local",
         )
     };
 
@@ -120,7 +120,7 @@ pub fn set_tray_remote_status(
             let _ = item.set_text(toggle_text);
         }
     }
-    if let Some(tray) = app.tray_by_id("insanuschat-tray") {
+    if let Some(tray) = app.tray_by_id("insanus-harnes-tray") {
         let _ = tray.set_tooltip(Some(tooltip));
     }
     Ok(())

@@ -1,13 +1,9 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import Editor, { DiffEditor } from '@monaco-editor/react';
 import {
-  BadgeCheck,
-  Blocks,
-  Check,
   ChevronDown,
   ChevronRight,
   Code2,
-  Download,
   ExternalLink,
   FileCode2,
   FileDiff,
@@ -24,7 +20,6 @@ import {
   Save,
   Search,
   Square,
-  Star,
   TerminalSquare,
   Trash2,
   X,
@@ -32,7 +27,7 @@ import {
 import { api } from '../api';
 import { defineInsanusTheme, ensureMonacoConfigured } from '../monacoSetup';
 import { getLocalDaemonNodeId, isDesktopRuntime } from '../platform/desktop';
-import { ExecutionNodeItem, FileTreeNode, VSCodeExtensionItem } from '../types';
+import { ExecutionNodeItem, FileTreeNode } from '../types';
 import { XtermTerminal } from './XtermTerminal';
 
 ensureMonacoConfigured();
@@ -59,7 +54,7 @@ interface OpenTab {
   diff?: string;
 }
 
-type ActivityTab = 'explorer' | 'search' | 'git' | 'extensions';
+type ActivityTab = 'explorer' | 'search' | 'git';
 
 function fileIconColor(filename: string): string {
   const low = filename.toLowerCase();
@@ -73,13 +68,6 @@ function fileIconColor(filename: string): string {
   if (low.endsWith('.yml') || low.endsWith('.yaml')) return 'text-rose-400';
   if (low.endsWith('.sh') || low.endsWith('.ps1') || low.endsWith('.bat')) return 'text-emerald-400';
   return 'text-zinc-400';
-}
-
-function formatInstalls(count?: number): string {
-  if (!count) return '';
-  if (count >= 1_000_000) return `${(count / 1_000_000).toFixed(1)}M`;
-  if (count >= 1_000) return `${(count / 1_000).toFixed(0)}K`;
-  return String(count);
 }
 
 export const VSCodeEditorView: React.FC<VSCodeEditorViewProps> = ({
@@ -106,13 +94,6 @@ export const VSCodeEditorView: React.FC<VSCodeEditorViewProps> = ({
 
   // Source Control (Git)
   const [gitInfo, setGitInfo] = useState<{ branch?: string; status_short?: string; diff_stat?: string } | null>(null);
-
-  // Menú Oficial de Complementos / Extensiones de VS Code (HU-31)
-  const [extQuery, setExtQuery] = useState('');
-  const [marketplaceExts, setMarketplaceExts] = useState<VSCodeExtensionItem[]>([]);
-  const [installedExts, setInstalledExts] = useState<VSCodeExtensionItem[]>([]);
-  const [loadingExts, setLoadingExts] = useState(false);
-  const [installingExtId, setInstallingExtId] = useState<string | null>(null);
 
   // Tabs & Monaco Editor state
   const [tabs, setTabs] = useState<OpenTab[]>([]);
@@ -165,31 +146,6 @@ export const VSCodeEditorView: React.FC<VSCodeEditorViewProps> = ({
   useEffect(() => {
     loadWorkspaceData();
   }, [loadWorkspaceData]);
-
-  // Cargar Complementos del Marketplace Oficial de VS Code al abrir la pestaña Complementos
-  const loadExtensions = useCallback(
-    async (q = '') => {
-      if (!nodeId) return;
-      setLoadingExts(true);
-      try {
-        const [instRes, mktRes] = await Promise.all([
-          api.listInstalledVSCodeExtensions(nodeId).catch(() => null),
-          api.searchVSCodeExtensions(nodeId, q, 20).catch(() => null),
-        ]);
-        if (instRes?.data?.extensions) setInstalledExts(instRes.data.extensions);
-        if (mktRes?.data?.extensions) setMarketplaceExts(mktRes.data.extensions);
-      } finally {
-        setLoadingExts(false);
-      }
-    },
-    [nodeId]
-  );
-
-  useEffect(() => {
-    if (activeActivity === 'extensions' && marketplaceExts.length === 0) {
-      loadExtensions(extQuery);
-    }
-  }, [activeActivity, loadExtensions, marketplaceExts.length, extQuery]);
 
   const openFileInTab = useCallback(
     async (filePath: string, customDiff?: string | null, jumpLine?: number, openInDiff = false) => {
@@ -359,7 +315,6 @@ export const VSCodeEditorView: React.FC<VSCodeEditorViewProps> = ({
       path: line.slice(2).trim(),
     }));
 
-  const installedIds = new Set(installedExts.map((x) => x.id));
   const isDirty = Boolean(activeTab && activeTab.content !== activeTab.savedContent);
 
   const renderFileTree = (items: FileTreeNode[], depth = 0) =>
@@ -424,7 +379,6 @@ export const VSCodeEditorView: React.FC<VSCodeEditorViewProps> = ({
                 { id: 'explorer', icon: Files, title: 'Explorador de Archivos' },
                 { id: 'search', icon: Search, title: 'Buscar en Workspace (Grep)' },
                 { id: 'git', icon: GitBranch, title: 'Control de Código Fuente (Git)', badge: gitChangedFiles.length },
-                { id: 'extensions', icon: Blocks, title: 'Complementos (VS Code Marketplace Oficial)' },
               ] as const
             ).map((item) => {
               const Icon = item.icon;
@@ -632,197 +586,6 @@ export const VSCodeEditorView: React.FC<VSCodeEditorViewProps> = ({
                 </div>
               </>
             )}
-
-            {/* PANEL D: MENÚ OFICIAL DE COMPLEMENTOS DE VS CODE (Visual Studio Marketplace + OpenVSX) (HU-31) */}
-            {activeActivity === 'extensions' && (
-              <>
-                <div className="h-9 px-3 border-b border-white/[0.06] flex items-center justify-between text-[11px] font-semibold uppercase tracking-wider text-zinc-400 shrink-0">
-                  <span>Complementos VS Code</span>
-                  <button
-                    type="button"
-                    onClick={() => loadExtensions(extQuery)}
-                    className="p-1 rounded hover:bg-white/[0.06] text-zinc-400 hover:text-zinc-100"
-                    title="Actualizar Marketplace"
-                  >
-                    <RefreshCw className={`w-3.5 h-3.5 ${loadingExts ? 'animate-spin' : ''}`} />
-                  </button>
-                </div>
-
-                <form
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    loadExtensions(extQuery);
-                  }}
-                  className="p-2.5 border-b border-white/[0.06]"
-                >
-                  <div className="flex gap-1.5">
-                    <input
-                      value={extQuery}
-                      onChange={(e) => setExtQuery(e.target.value)}
-                      placeholder="Buscar en Marketplace VS Code..."
-                      className="flex-1 h-8 px-2.5 rounded-md bg-[#0b0d12] border border-white/[0.09] focus:border-emerald-500/60 text-xs text-zinc-100 outline-none"
-                    />
-                    <button
-                      type="submit"
-                      disabled={loadingExts}
-                      className="h-8 px-2 rounded-md bg-white/[0.08] hover:bg-white/[0.14] text-zinc-200"
-                    >
-                      <Search className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </form>
-
-                <div className="flex-1 overflow-y-auto divide-y divide-white/[0.06]">
-                  {/* Instalados */}
-                  <div className="p-2 space-y-1.5">
-                    <div className="px-1 text-[10px] font-semibold uppercase tracking-wider text-zinc-500 flex items-center justify-between">
-                      <span>Instalados</span>
-                      <span className="font-mono">{installedExts.length}</span>
-                    </div>
-                    {installedExts.map((ext) => (
-                      <div
-                        key={ext.id}
-                        className="p-2 rounded-lg bg-white/[0.03] border border-white/[0.05] flex items-start gap-2.5"
-                      >
-                        {ext.icon_url ? (
-                          <img src={ext.icon_url} alt="" className="w-7 h-7 rounded object-contain shrink-0 bg-white/[0.04] p-0.5" />
-                        ) : (
-                          <div className="w-7 h-7 rounded bg-emerald-500/15 border border-emerald-500/25 flex items-center justify-center shrink-0">
-                            <Blocks className="w-3.5 h-3.5 text-emerald-400" />
-                          </div>
-                        )}
-                        <div className="min-w-0 flex-1 space-y-0.5">
-                          <div className="flex items-center justify-between gap-1">
-                            <span className="text-xs font-semibold text-zinc-100 truncate">
-                              {ext.display_name}
-                            </span>
-                            <span className="text-[10px] font-mono text-zinc-500 shrink-0">v{ext.version}</span>
-                          </div>
-                          <p className="text-[11px] text-zinc-400 line-clamp-2 leading-snug">
-                            {ext.description}
-                          </p>
-                          <div className="flex items-center justify-between pt-1">
-                            <span className="text-[10px] text-zinc-500 truncate">{ext.publisher}</span>
-                            {ext.builtin ? (
-                              <span className="px-1.5 py-0.2 rounded bg-emerald-500/15 text-emerald-300 text-[9.5px] font-mono">
-                                Built-in
-                              </span>
-                            ) : (
-                              <button
-                                type="button"
-                                onClick={async () => {
-                                  await api.uninstallVSCodeExtension(nodeId, ext.id);
-                                  notify(`Desinstalada: ${ext.display_name}`);
-                                  await loadExtensions(extQuery);
-                                }}
-                                className="px-2 py-0.5 rounded bg-white/[0.06] hover:bg-rose-500/20 text-zinc-300 hover:text-rose-300 text-[10px] transition"
-                              >
-                                Desinstalar
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Marketplace Oficial de VS Code */}
-                  <div className="p-2 space-y-1.5">
-                    <div className="px-1 text-[10px] font-semibold uppercase tracking-wider text-zinc-500 flex items-center justify-between">
-                      <span>Marketplace Oficial VS Code</span>
-                      {loadingExts && <Loader2 className="w-3 h-3 animate-spin text-emerald-400" />}
-                    </div>
-
-                    {marketplaceExts.map((ext) => {
-                      const isInstalled = installedIds.has(ext.id);
-                      const isInstalling = installingExtId === ext.id;
-                      return (
-                        <div
-                          key={ext.id}
-                          className="p-2 rounded-lg hover:bg-white/[0.04] transition flex items-start gap-2.5"
-                        >
-                          {ext.icon_url ? (
-                            <img src={ext.icon_url} alt="" className="w-8 h-8 rounded object-contain shrink-0 bg-white/[0.04] p-0.5" />
-                          ) : (
-                            <div className="w-8 h-8 rounded bg-white/[0.05] flex items-center justify-center shrink-0">
-                              <Blocks className="w-4 h-4 text-zinc-400" />
-                            </div>
-                          )}
-                          <div className="min-w-0 flex-1 space-y-0.5">
-                            <div className="flex items-center justify-between gap-1">
-                              <span className="text-xs font-semibold text-zinc-100 truncate">
-                                {ext.display_name}
-                              </span>
-                              {ext.marketplace_url && (
-                                <a
-                                  href={ext.marketplace_url}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="text-zinc-500 hover:text-zinc-300 shrink-0"
-                                  title="Ver en Visual Studio Marketplace"
-                                >
-                                  <ExternalLink className="w-3 h-3" />
-                                </a>
-                              )}
-                            </div>
-                            <p className="text-[11px] text-zinc-400 line-clamp-2 leading-snug">
-                              {ext.description}
-                            </p>
-                            <div className="flex items-center justify-between gap-1 pt-1">
-                              <div className="flex items-center gap-1.5 text-[10px] text-zinc-500 min-w-0">
-                                <span className="flex items-center gap-0.5 truncate">
-                                  {ext.verified && <BadgeCheck className="w-3 h-3 text-sky-400 shrink-0" />}
-                                  <span className="truncate">{ext.publisher}</span>
-                                </span>
-                                {ext.install_count ? (
-                                  <span className="flex items-center gap-0.5 font-mono shrink-0">
-                                    <Download className="w-2.5 h-2.5" />
-                                    {formatInstalls(ext.install_count)}
-                                  </span>
-                                ) : null}
-                                {ext.rating ? (
-                                  <span className="flex items-center gap-0.5 font-mono shrink-0">
-                                    <Star className="w-2.5 h-2.5 text-amber-400 fill-amber-400" />
-                                    {ext.rating}
-                                  </span>
-                                ) : null}
-                              </div>
-
-                              {isInstalled ? (
-                                <span className="flex items-center gap-0.5 text-[10px] text-emerald-400 font-medium shrink-0">
-                                  <Check className="w-3 h-3" />
-                                  <span>Instalada</span>
-                                </span>
-                              ) : (
-                                <button
-                                  type="button"
-                                  disabled={isInstalling}
-                                  onClick={async () => {
-                                    setInstallingExtId(ext.id);
-                                    try {
-                                      await api.installVSCodeExtension(nodeId, ext);
-                                      notify(`Complemento instalado: ${ext.display_name}`);
-                                      await loadExtensions(extQuery);
-                                    } catch (e: any) {
-                                      notify(e.message || 'Error instalando complemento');
-                                    } finally {
-                                      setInstallingExtId(null);
-                                    }
-                                  }}
-                                  className="px-2 py-0.5 rounded bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-semibold text-[10px] transition shrink-0"
-                                >
-                                  {isInstalling ? '...' : 'Instalar'}
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              </>
-            )}
           </aside>
         )}
 
@@ -979,7 +742,7 @@ export const VSCodeEditorView: React.FC<VSCodeEditorViewProps> = ({
                     VS Code Workbench — {workspace === '.' ? node?.name || 'Local' : workspace}
                   </div>
                   <p className="text-xs text-zinc-500 max-w-sm">
-                    Abrí un archivo del Explorador, buscá en el proyecto, explorá el <strong className="text-zinc-300">Marketplace Oficial de Complementos</strong> o usá la terminal integrada con <kbd className="px-1.5 py-0.5 rounded bg-white/[0.06] text-zinc-300 font-mono text-[10px]">Ctrl+`</kbd>.
+                    Abrí un archivo del Explorador, buscá en el proyecto, revisá cambios Git o usá la terminal integrada con <kbd className="px-1.5 py-0.5 rounded bg-white/[0.06] text-zinc-300 font-mono text-[10px]">Ctrl+`</kbd>.
                   </p>
                 </div>
                 <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
@@ -993,11 +756,11 @@ export const VSCodeEditorView: React.FC<VSCodeEditorViewProps> = ({
                   </button>
                   <button
                     type="button"
-                    onClick={() => setActiveActivity('extensions')}
+                    onClick={() => setActiveActivity('search')}
                     className="h-8 px-3 rounded-lg bg-white/[0.06] hover:bg-white/[0.10] border border-white/[0.08] text-xs text-zinc-200 flex items-center gap-1.5"
                   >
-                    <Blocks className="w-3.5 h-3.5 text-sky-400" />
-                    <span>Complementos VS Code</span>
+                    <Search className="w-3.5 h-3.5 text-sky-400" />
+                    <span>Buscar en Proyecto</span>
                   </button>
                 </div>
               </div>
@@ -1229,14 +992,6 @@ export const VSCodeEditorView: React.FC<VSCodeEditorViewProps> = ({
               <span>{gitInfo.branch}</span>
             </button>
           )}
-          <button
-            type="button"
-            onClick={() => setActiveActivity('extensions')}
-            className="hidden sm:flex items-center gap-1 hover:text-zinc-200 transition"
-          >
-            <Blocks className="w-3 h-3" />
-            <span>{installedExts.length || 1} ext</span>
-          </button>
         </div>
 
         <div className="flex items-center gap-3 tabular-nums shrink-0">

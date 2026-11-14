@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useState } from 'react';
 import {
   Activity,
   Check,
-  CheckCircle2,
   Cloud,
   Code2,
   Cpu,
@@ -870,41 +869,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   </button>
                 </div>
 
-                <div className="p-3.5 rounded-xl bg-[#09090b] border border-white/[0.07] flex items-center justify-between gap-3">
-                  <div>
-                    <div className="text-xs font-medium text-zinc-100">Sincronizar Extensiones con VS Code CLI</div>
-                    <div className="text-[11px] text-zinc-500">
-                      Al instalar un complemento en el Workbench web/desktop, ejecutar también <code className="text-zinc-300">--install-extension</code> en tu VS Code local.
-                    </div>
-                  </div>
-                  <input
-                    type="checkbox"
-                    checked={cfg.sync_cli_extensions}
-                    onChange={(e) =>
-                      applyLocalAndBackendPatch(
-                        { sync_cli_extensions: e.target.checked },
-                        'Sincronización CLI de extensiones actualizada'
-                      )
-                    }
-                    className="w-4 h-4 accent-emerald-500 shrink-0 cursor-pointer"
-                  />
-                </div>
-
-                <div className="p-3.5 rounded-xl bg-[#09090b] border border-white/[0.07] flex flex-wrap items-center justify-between gap-3 text-xs">
-                  <div>
-                    <div className="font-medium text-zinc-200 flex items-center gap-1.5">
-                      <CheckCircle2
-                        className={`w-3.5 h-3.5 ${localStatus?.vscode?.extension_ready ? 'text-emerald-400' : 'text-amber-400'}`}
-                      />
-                      <span>Extensión nativa insanuschat-harness</span>
-                    </div>
-                    <div className="text-[10.5px] font-mono text-zinc-500 mt-0.5 break-all">
-                      {localStatus?.vscode?.extension_path}
-                    </div>
-                  </div>
-                  <span className="px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-300 font-mono text-[10.5px]">
-                    {localStatus?.vscode?.installed_extensions_count || 1} ext
-                  </span>
+                <div className="p-3.5 rounded-xl bg-[#09090b] border border-white/[0.07] text-xs text-zinc-400 leading-relaxed">
+                  Al abrir un archivo desde el Editor integrado con el botón <strong className="text-sky-300">VS Code</strong>, se lanza tu editor nativo posicionado en el archivo y línea exactos (<code className="text-emerald-400">--goto archivo:línea</code>) para usar todas tus extensiones locales reales.
                 </div>
               </div>
 

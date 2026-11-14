@@ -1317,7 +1317,7 @@ export const App: React.FC = () => {
               <div className="leading-none">
                 <div className="font-semibold text-[13.5px] text-zinc-100">insanus-harnes</div>
                 <div className="text-[10px] text-zinc-500 font-mono mt-0.5">
-                  {isDesktop ? 'v1.4.1 · Desktop' : 'v1.4.1 · harnes.insanustech.com.ar'}
+                  {isDesktop ? 'v1.4.2 · Desktop' : 'v1.4.2 · harnes.insanustech.com.ar'}
                 </div>
               </div>
             </div>
@@ -1653,12 +1653,12 @@ export const App: React.FC = () => {
               )}
 
               {/* Derecha: Pill Control Remoto (Desktop) + Popover de Entorno + Toggle de Vista Contextual */}
-              <div className="flex items-center justify-end gap-1.5 shrink-0 flex-1">
+              <div className="flex items-center justify-end gap-1.5 shrink-0">
                 {isDesktop && localStatus && (
                   <button
                     type="button"
                     onClick={() => setMainSection('settings')}
-                    className={`hidden md:flex h-7 px-2 rounded-lg border text-[11px] font-medium items-center gap-1.5 transition shrink-0 ${
+                    className={`hidden xl:flex h-7 px-2 rounded-lg border text-[11px] font-medium items-center gap-1.5 whitespace-nowrap transition shrink-0 ${
                       localStatus.config.expose_to_cloud
                         ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/20'
                         : 'bg-amber-500/10 border-amber-500/30 text-amber-300 hover:bg-amber-500/20'
@@ -1667,12 +1667,12 @@ export const App: React.FC = () => {
                   >
                     {localStatus.config.expose_to_cloud ? (
                       <>
-                        <Globe className="w-3 h-3" />
+                        <Globe className="w-3 h-3 shrink-0" />
                         <span>{localStatus.bridge.connected ? 'Remoto ON' : 'Conectando...'}</span>
                       </>
                     ) : (
                       <>
-                        <Lock className="w-3 h-3" />
+                        <Lock className="w-3 h-3 shrink-0" />
                         <span>Solo Local</span>
                       </>
                     )}

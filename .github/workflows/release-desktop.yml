@@ -7,9 +7,9 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: 'Tag del release (ej. v1.4.1)'
+        description: 'Tag del release (ej. v1.4.2)'
         required: false
-        default: 'v1.4.1'
+        default: 'v1.4.2'
 
 permissions:
   contents: write
@@ -41,7 +41,6 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y \
             libwebkit2gtk-4.1-dev \
-            libappindicator3-dev \
             librsvg2-dev \
             patchelf \
             build-essential \
@@ -124,7 +123,7 @@ jobs:
           if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
             echo "name=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
           else
-            echo "name=${{ github.event.inputs.release_tag || 'v1.4.1' }}" >> "$GITHUB_OUTPUT"
+            echo "name=${{ github.event.inputs.release_tag || 'v1.4.2' }}" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Publish GitHub Release

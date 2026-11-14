@@ -84,7 +84,7 @@ class WorkstationConfig:
     cloud_backend_url: str = field(default_factory=lambda: os.environ.get("CLOUD_BACKEND_URL", "https://harnes.insanustech.com.ar"))
     cloud_jwt_token: Optional[str] = None
     config_version: int = 1
-    app_version: str = "1.4.1"
+    app_version: str = "1.4.2"
 
     # Preferencias Desktop (Tauri)
     minimize_to_tray: bool = True

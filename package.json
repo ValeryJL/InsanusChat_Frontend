@@ -1,11 +1,12 @@
 {
   "name": "insanus-harnes",
   "private": true,
-  "version": "1.4.2",
+  "version": "1.5.0",
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0 --port 5173",
-    "build": "vite build && node scripts/copy-monaco.mjs",
+    "extensions:build": "node scripts/build-vscode-extensions.mjs",
+    "build": "node scripts/build-vscode-extensions.mjs && vite build && node scripts/copy-monaco.mjs",
     "preview": "vite preview --host 0.0.0.0 --port 4173",
     "sidecar:build": "python workstation-daemon/build_sidecar.py",
     "tauri": "tauri",

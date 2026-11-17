@@ -18,8 +18,11 @@ src-tauri/gen/
 src-tauri/binaries/insanus-harnes-daemon-*
 src-tauri/binaries/insanus-workstation-daemon-*
 src-tauri/resources/insanuschat-harness/
+src-tauri/resources/insanus-obsidian-theme/
 
 # Workstation Python Sidecar local artifacts
+workstation-daemon/vscode_extension/insanuschat-harness/media/webview/
+workstation-daemon/vscode_extension/dist/
 workstation-daemon/.venv/
 workstation-daemon/build_pyinstaller/
 workstation-daemon/.pytest_cache/

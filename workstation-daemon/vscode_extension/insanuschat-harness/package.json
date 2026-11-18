@@ -1,14 +1,15 @@
 {
   "name": "insanuschat-harness",
-  "displayName": "InsanusChat Agent Harness & 2D Branching Tree",
-  "description": "Extensión nativa integrada en InsanusChat Workstation (VS Code / VSCodium / InsanusCode): conecta selección de código, diagnósticos LSP y estado del daemon local con InsanusChat.",
-  "version": "1.4.0",
+  "displayName": "insanus-harnes Agent & Workspace Chat",
+  "description": "Extensión nativa de insanus-harnes para Visual Studio Code: trae el chat vivo de este workspace sincronizado en tiempo real con el Agente IA, errores LSP, diffs y ramificación en árbol.",
+  "version": "1.5.0",
   "publisher": "insanustech",
   "engines": {
     "vscode": "^1.85.0"
   },
   "categories": [
     "AI",
+    "Chat",
     "Other"
   ],
   "activationEvents": [
@@ -17,17 +18,22 @@
   "main": "./extension.js",
   "contributes": {
     "configuration": {
-      "title": "InsanusChat Workstation",
+      "title": "insanus-harnes",
       "properties": {
         "insanuschat.localDaemonUrl": {
           "type": "string",
           "default": "http://127.0.0.1:8765",
-          "description": "URL del microservicio local InsanusChat Workstation"
+          "description": "URL del microservicio local insanus-harnes-daemon (se autodetecta desde runtime.json)"
         },
         "insanuschat.webAppUrl": {
           "type": "string",
           "default": "https://harnes.insanustech.com.ar",
-          "description": "URL de la interfaz web de insanus-harnes"
+          "description": "URL del servidor Cloud / Web de insanus-harnes"
+        },
+        "insanuschat.autoFocusSidebar": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enfocar automáticamente el chat del workspace al abrir el Editor Vestido"
         }
       }
     },
@@ -35,7 +41,7 @@
       "activitybar": [
         {
           "id": "insanuschat-sidebar",
-          "title": "InsanusChat Harness",
+          "title": "insanus-harnes Chat",
           "icon": "media/icon.svg"
         }
       ]
@@ -45,28 +51,43 @@
         {
           "type": "webview",
           "id": "insanuschat.agentView",
-          "name": "Vista de Agente & Árbol 2D"
+          "name": "Chat del Workspace"
         }
       ]
     },
     "commands": [
       {
+        "command": "insanuschat.focusChat",
+        "title": "insanus-harnes: Enfocar Chat del Workspace"
+      },
+      {
         "command": "insanuschat.openAgentView",
-        "title": "InsanusChat: Abrir Vista de Agente (Antigravity Mode)"
+        "title": "insanus-harnes: Abrir Chat en Panel Lateral"
       },
       {
         "command": "insanuschat.sendSelectionToAgent",
-        "title": "InsanusChat: Enviar Selección al Agente y Ramificar"
+        "title": "insanus-harnes: Enviar Selección al Agente"
       },
       {
         "command": "insanuschat.sendDiagnosticsToAgent",
-        "title": "InsanusChat: Enviar Errores LSP del Archivo al Agente"
+        "title": "insanus-harnes: Enviar Errores LSP del Archivo al Agente"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "insanuschat.focusChat",
+        "key": "ctrl+shift+i",
+        "mac": "cmd+shift+i"
       }
     ],
     "menus": {
       "editor/context": [
         {
           "command": "insanuschat.sendSelectionToAgent",
+          "group": "navigation"
+        },
+        {
+          "command": "insanuschat.sendDiagnosticsToAgent",
           "group": "navigation"
         }
       ]

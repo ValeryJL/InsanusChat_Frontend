@@ -17,6 +17,7 @@ DAEMON_DIR = Path(__file__).resolve().parent
 FRONTEND_DIR = DAEMON_DIR.parent
 TAURI_BIN_DIR = FRONTEND_DIR / "src-tauri" / "binaries"
 TAURI_RES_EXT_DIR = FRONTEND_DIR / "src-tauri" / "resources" / "insanuschat-harness"
+TAURI_RES_THEME_DIR = FRONTEND_DIR / "src-tauri" / "resources" / "insanus-obsidian-theme"
 
 
 def detect_target_triple() -> str:
@@ -50,6 +51,11 @@ def main():
     if TAURI_RES_EXT_DIR.exists():
         shutil.rmtree(TAURI_RES_EXT_DIR)
     shutil.copytree(DAEMON_DIR / "vscode_extension" / "insanuschat-harness", TAURI_RES_EXT_DIR)
+
+    if TAURI_RES_THEME_DIR.exists():
+        shutil.rmtree(TAURI_RES_THEME_DIR)
+    if (DAEMON_DIR / "vscode_extension" / "insanus-obsidian-theme").exists():
+        shutil.copytree(DAEMON_DIR / "vscode_extension" / "insanus-obsidian-theme", TAURI_RES_THEME_DIR)
 
     sep = ";" if is_win else ":"
     add_data = f"{DAEMON_DIR / 'vscode_extension'}{sep}vscode_extension"

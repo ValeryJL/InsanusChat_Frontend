@@ -20,7 +20,7 @@ from typing import Any, Dict, Optional
 
 from fastapi import Body, FastAPI, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 import httpx
 import uvicorn
 
@@ -29,6 +29,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from config import WorkstationConfig
 from harness.filesystem import WorkstationFilesystem
 from harness.git_ops import create_git_checkpoint, get_git_status
+from harness.ide_proxy import IDEProxyHandler
+from harness.ide_server import InsanusIDEServerManager
 from harness.pty_session import WorkstationPtySession
 from harness.terminal import WorkstationTerminal
 from harness.vscode_engine import VSCodeManager
@@ -47,6 +49,8 @@ vscode_mgr = VSCodeManager(
     custom_editor_path=cfg.custom_editor_path,
     sync_cli_extensions=cfg.sync_cli_extensions,
 )
+ide_mgr = InsanusIDEServerManager(cfg, vscode_mgr, fs_engine)
+ide_proxy = IDEProxyHandler(ide_mgr, cfg)
 
 
 def _apply_config_to_engines() -> None:
@@ -125,6 +129,16 @@ def dispatch_harness_rpc(action: str, params: Dict[str, Any], is_remote: bool = 
         return vscode_mgr.install_extension(params.get("extension") or params)
     if action == "uninstall_extension":
         return vscode_mgr.uninstall_extension(params.get("ext_id") or "")
+    if action == "ide_status":
+        return ide_mgr.get_status()
+    if action == "get_ide_diagnostics":
+        return ide_mgr.get_diagnostics(ws_name, params.get("path"))
+    if action == "ide_open_file":
+        ide_mgr.enqueue_command(
+            ws_name,
+            {"action": "open_file", "path": params.get("path", ""), "line": params.get("line")},
+        )
+        return {"ok": True}
     if action == "set_privacy":
         cfg.apply_policy(params, allow_enable_remote=not is_remote)
         _apply_config_to_engines()
@@ -140,20 +154,26 @@ bridge = CloudWebSocketBridge(
     on_policy_sync=_handle_policy_sync_from_backend,
     on_extensions_sync=vscode_mgr.apply_synced_extensions,
     editors_provider=vscode_mgr.detect_editors,
+    ide_mgr=ide_mgr,
+    ide_proxy=ide_proxy,
 )
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    secret = os.environ.get("INSANUS_LOCAL_SECRET", "").strip() or LOCAL_SECRET
+    ide_mgr.write_runtime_file(secret)
     await bridge.sync_state()
     yield
     await bridge.stop()
+    await ide_proxy.close()
+    ide_mgr.stop()
 
 
 app = FastAPI(
-    title="InsanusChat Workstation Local Sidecar",
-    description="Microservicio local 127.0.0.1 para VS Code Workbench, Terminal PTY real y Control Remoto Opt-in.",
-    version="1.4.0",
+    title="insanus-harnes Local Sidecar",
+    description="Microservicio local 127.0.0.1 para VS Code Real Embebido, Editor Vestido, Terminal PTY y Control Remoto Opt-in.",
+    version="1.5.0",
     lifespan=lifespan,
 )
 
@@ -224,6 +244,7 @@ async def get_local_status():
         "workspaces": fs_engine.list_workspaces(include_restricted=False),
         "all_workspaces": fs_engine.list_workspaces(include_restricted=True),
         "vscode": vscode_st,
+        "ide": ide_mgr.get_status(),
         "pid": os.getpid(),
         "port": cfg.bind_port,
     }
@@ -252,6 +273,7 @@ async def bootstrap_sync_with_cloud(body: Dict[str, Any] = Body(...)):
 
     _apply_config_to_engines()
     cfg.save()
+    ide_mgr.write_runtime_file(os.environ.get("INSANUS_LOCAL_SECRET", "").strip() or LOCAL_SECRET)
     bridge.log("info", f"Sesión sincronizada en 1 clic con {cfg.cloud_backend_url}")
     await bridge.sync_state()
     return {
@@ -280,6 +302,7 @@ async def update_local_settings(body: Dict[str, Any] = Body(...)):
 
     _apply_config_to_engines()
     cfg.save()
+    ide_mgr.write_runtime_file(os.environ.get("INSANUS_LOCAL_SECRET", "").strip() or LOCAL_SECRET)
     bridge.log(
         "info",
         f"Ajustes actualizados (Control Remoto={'ON' if cfg.expose_to_cloud else 'OFF'}, TerminalRemota={'ON' if cfg.allow_remote_terminal else 'OFF'})",
@@ -568,9 +591,145 @@ async def local_uninstall_extension(ext_id: str):
 
 
 # ---------------------------------------------------------------------------
-# Watchdog Anti-Zombie (HU-38): mata el daemon si Tauri cierra o muere
+# Motor VS Code Real Embebido + Editor Vestido + Proxy /ide/{secret}/* (v1.5.0)
+# ---------------------------------------------------------------------------
+@app.get("/local/ide/status")
+async def local_ide_status():
+    st = ide_mgr.get_status()
+    return {"data": st, **st}
+
+
+@app.post("/local/ide/start")
+async def local_ide_start(body: Dict[str, Any] = Body(default_factory=dict)):
+    try:
+        ws = str(body.get("workspace") or ".")
+        ws_dir = fs_engine.resolve_workspace_dir(ws)
+        st = await ide_mgr.ensure_started()
+        from urllib.parse import quote
+
+        folder_uri_path = ide_mgr.to_vscode_folder_uri_path(ws_dir)
+        ide_url = (
+            f"http://{cfg.bind_host}:{cfg.bind_port}/ide/{ide_mgr.session_secret}/"
+            f"?folder={quote(folder_uri_path, safe='/:')}&insanus_embedded=1"
+        )
+        payload = {**st, "ide_url": ide_url, "folder_path": folder_uri_path, "workspace": ws}
+        return {"data": payload, **payload}
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=str(e))
+
+
+@app.post("/local/ide/stop")
+async def local_ide_stop():
+    ide_mgr.stop()
+    st = ide_mgr.get_status()
+    return {"data": st, **st}
+
+
+@app.post("/local/ide/install-openvscode")
+async def local_ide_install_openvscode():
+    try:
+        res = await ide_mgr.install_openvscode_server()
+        return {"data": res, **res}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/local/ide/launch-dressed")
+async def local_ide_launch_dressed(body: Dict[str, Any] = Body(default_factory=dict)):
+    ws = str(body.get("workspace") or ".")
+    ws_dir = fs_engine.resolve_workspace_dir(ws)
+    res = ide_mgr.launch_dressed_desktop(
+        workspace_full_path=str(ws_dir),
+        file_path=body.get("file_path") or None,
+        line=body.get("line"),
+        editor_id=body.get("editor_id") or None,
+        force_reinstall=bool(body.get("force_reinstall", False)),
+    )
+    if res.get("ok"):
+        bridge.log("info", f"Editor Vestido lanzado en {ws} (Obsidian + insanuschat-harness)")
+    return {"data": res, **res}
+
+
+@app.post("/local/ide/reinstall-profile")
+async def local_ide_reinstall_profile():
+    ext_dir = ide_mgr.provision_dressed_desktop_profile(force_reinstall=True)
+    ide_mgr.provision_embedded_server_profile()
+    return {"ok": True, "extensions_dir": str(ext_dir), "bundled_extensions": ide_mgr.get_status()["bundled_extensions"]}
+
+
+@app.get("/local/ide/bootstrap-context")
+async def local_ide_bootstrap_context(folder: str = Query("")):
+    return ide_mgr.resolve_workspace_for_folder(folder)
+
+
+@app.post("/local/ide/diagnostics")
+async def local_ide_push_diagnostics(body: Dict[str, Any] = Body(...)):
+    rec = ide_mgr.update_diagnostics(body)
+    return {"ok": True, "error_count": rec["error_count"], "warning_count": rec["warning_count"]}
+
+
+@app.get("/local/ide/diagnostics")
+async def local_ide_get_diagnostics(workspace: str = Query("."), path: Optional[str] = Query(None)):
+    res = ide_mgr.get_diagnostics(workspace, path)
+    return {"data": res, **res}
+
+
+@app.post("/local/ide/open-file")
+async def local_ide_open_file(body: Dict[str, Any] = Body(...)):
+    ws = str(body.get("workspace") or ".")
+    ide_mgr.enqueue_command(
+        ws,
+        {
+            "action": "open_file",
+            "path": str(body.get("path") or ""),
+            "line": body.get("line"),
+        },
+    )
+    return {"ok": True}
+
+
+@app.get("/local/ide/commands/poll")
+async def local_ide_poll_commands(workspace: str = Query(".")):
+    return {"commands": ide_mgr.poll_commands(workspace)}
+
+
+@app.api_route("/ide/{session_secret}", methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"])
+async def local_ide_proxy_root(request: Request, session_secret: str):
+    if not request.url.path.endswith("/"):
+        qs = f"?{request.url.query}" if request.url.query else ""
+        return RedirectResponse(url=f"/ide/{session_secret}/{qs}", status_code=307)
+    return await ide_proxy.handle_local_http(request, session_secret, "")
+
+
+@app.api_route(
+    "/ide/{session_secret}/{subpath:path}",
+    methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
+)
+async def local_ide_proxy_subpath(request: Request, session_secret: str, subpath: str):
+    return await ide_proxy.handle_local_http(request, session_secret, subpath)
+
+
+@app.websocket("/ide/{session_secret}/{subpath:path}")
+async def local_ide_proxy_ws(websocket: WebSocket, session_secret: str, subpath: str):
+    await ide_proxy.handle_local_ws(websocket, session_secret, subpath)
+
+
+@app.websocket("/ide/{session_secret}")
+async def local_ide_proxy_ws_root(websocket: WebSocket, session_secret: str):
+    await ide_proxy.handle_local_ws(websocket, session_secret, "")
+
+
+# ---------------------------------------------------------------------------
+# Watchdog Anti-Zombie (HU-38): mata el daemon + IDE server si Tauri muere
 # ---------------------------------------------------------------------------
 def _start_parent_watchdog(watch_stdin: bool, parent_pid: Optional[int]) -> None:
+    def _shutdown_now():
+        try:
+            ide_mgr.stop()
+        except Exception:
+            pass
+        os._exit(0)
+
     if watch_stdin:
         def _stdin_monitor():
             try:
@@ -580,7 +739,7 @@ def _start_parent_watchdog(watch_stdin: bool, parent_pid: Optional[int]) -> None
                         break
             except Exception:
                 pass
-            os._exit(0)
+            _shutdown_now()
 
         threading.Thread(target=_stdin_monitor, daemon=True).start()
 
@@ -609,7 +768,7 @@ def _start_parent_watchdog(watch_stdin: bool, parent_pid: Optional[int]) -> None
                 except Exception:
                     alive = False
                 if not alive:
-                    os._exit(0)
+                    _shutdown_now()
 
         threading.Thread(target=_pid_monitor, daemon=True).start()
 

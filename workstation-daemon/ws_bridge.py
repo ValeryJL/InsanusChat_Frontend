@@ -7,8 +7,10 @@ Túnel WebSocket Saliente (Opt-in) desde InsanusChat Workstation hacia InsanusCh
   el túnel y todas las sesiones PTY remotas de forma inmediata.
 """
 import asyncio
+import base64
 from collections import deque
 from datetime import datetime, timezone
+import gzip
 import json
 import logging
 from pathlib import Path
@@ -33,6 +35,8 @@ class CloudWebSocketBridge:
         on_policy_sync: Optional[Callable[[Dict[str, Any], Optional[str]], None]] = None,
         on_extensions_sync: Optional[Callable[[List[Dict[str, Any]]], None]] = None,
         editors_provider: Optional[Callable[[], List[Dict[str, Any]]]] = None,
+        ide_mgr: Optional[Any] = None,
+        ide_proxy: Optional[Any] = None,
     ):
         self.config = config
         self.rpc_dispatcher = rpc_dispatcher
@@ -40,6 +44,8 @@ class CloudWebSocketBridge:
         self.on_policy_sync = on_policy_sync
         self.on_extensions_sync = on_extensions_sync
         self.editors_provider = editors_provider
+        self.ide_mgr = ide_mgr
+        self.ide_proxy = ide_proxy
 
         self._task: Optional[asyncio.Task] = None
         self._stop_event = asyncio.Event()
@@ -48,6 +54,8 @@ class CloudWebSocketBridge:
         self.connected_since: Optional[str] = None
         self._pty_sessions: Dict[str, WorkstationPtySession] = {}
         self._pty_tasks: Dict[str, asyncio.Task] = {}
+        self._ide_ws_conns: Dict[str, Any] = {}
+        self._ide_ws_tasks: Dict[str, asyncio.Task] = {}
         self._logs: Deque[Dict[str, str]] = deque(maxlen=200)
         self.log("info", "Microservicio Workstation inicializado (modo Solo Local por defecto)")
 
@@ -84,6 +92,182 @@ class CloudWebSocketBridge:
             except Exception:
                 pass
         self._pty_sessions.clear()
+        for _, task in list(self._ide_ws_tasks.items()):
+            task.cancel()
+        self._ide_ws_tasks.clear()
+        for _, conn in list(self._ide_ws_conns.items()):
+            try:
+                asyncio.create_task(conn.close())
+            except Exception:
+                pass
+        self._ide_ws_conns.clear()
+
+    async def _handle_ide_http_req(self, ws, payload: Dict[str, Any]) -> None:
+        req_id = payload.get("req_id")
+        if not req_id:
+            return
+        try:
+            if not self.ide_proxy:
+                raise RuntimeError("IDE proxy no inicializado")
+            raw_body = base64.b64decode(payload.get("body_b64") or "") if payload.get("body_b64") else b""
+            res = await self.ide_proxy.proxy_http_raw(
+                method=str(payload.get("method") or "GET"),
+                session_secret=str(payload.get("session_secret") or ""),
+                subpath=str(payload.get("subpath") or ""),
+                query_string=str(payload.get("query") or ""),
+                headers=dict(payload.get("headers") or {}),
+                body=raw_body,
+            )
+            body_bytes: bytes = res["body"] or b""
+            gzipped = False
+            if len(body_bytes) > 4096:
+                body_bytes = gzip.compress(body_bytes, compresslevel=5)
+                gzipped = True
+
+            # Streaming en chunks <=192KB para no superar nunca límites de frame WS de Cloudflare/Nginx/Uvicorn
+            chunk_size = 192 * 1024
+            if len(body_bytes) <= chunk_size:
+                await ws.send(
+                    json.dumps(
+                        {
+                            "cmd": "ide_http_res",
+                            "req_id": req_id,
+                            "status": res["status"],
+                            "headers": res["headers"],
+                            "set_cookies": res.get("set_cookies") or [],
+                            "gzipped": gzipped,
+                            "body_b64": base64.b64encode(body_bytes).decode("ascii") if body_bytes else "",
+                        },
+                        ensure_ascii=False,
+                    )
+                )
+            else:
+                total_chunks = (len(body_bytes) + chunk_size - 1) // chunk_size
+                await ws.send(
+                    json.dumps(
+                        {
+                            "cmd": "ide_http_head",
+                            "req_id": req_id,
+                            "status": res["status"],
+                            "headers": res["headers"],
+                            "set_cookies": res.get("set_cookies") or [],
+                            "gzipped": gzipped,
+                            "total_chunks": total_chunks,
+                        },
+                        ensure_ascii=False,
+                    )
+                )
+                for idx in range(total_chunks):
+                    part = body_bytes[idx * chunk_size : (idx + 1) * chunk_size]
+                    await ws.send(
+                        json.dumps(
+                            {
+                                "cmd": "ide_http_chunk",
+                                "req_id": req_id,
+                                "idx": idx,
+                                "data_b64": base64.b64encode(part).decode("ascii"),
+                            },
+                            ensure_ascii=False,
+                        )
+                    )
+                await ws.send(json.dumps({"cmd": "ide_http_end", "req_id": req_id}))
+        except Exception as exc:
+            try:
+                await ws.send(
+                    json.dumps(
+                        {
+                            "cmd": "ide_http_res",
+                            "req_id": req_id,
+                            "status": 502,
+                            "headers": {"content-type": "application/json"},
+                            "body_b64": base64.b64encode(json.dumps({"detail": str(exc)}).encode("utf-8")).decode("ascii"),
+                        },
+                        ensure_ascii=False,
+                    )
+                )
+            except Exception:
+                pass
+
+    async def _run_ide_ws_stream(self, tunnel_ws, stream_id: str, payload: Dict[str, Any]) -> None:
+        try:
+            if not self.ide_proxy or not self.ide_mgr:
+                raise RuntimeError("IDE proxy no disponible")
+            session_secret = str(payload.get("session_secret") or "")
+            if not self.ide_proxy.is_valid_session_secret(session_secret):
+                raise PermissionError("Session secret inválido")
+            if not self.ide_mgr.is_running():
+                await self.ide_mgr.ensure_started()
+            ws_url = self.ide_proxy.build_upstream_ws_url(
+                session_secret,
+                str(payload.get("subpath") or ""),
+                str(payload.get("query") or ""),
+            )
+            if not ws_url:
+                raise RuntimeError("IDE upstream offline")
+            subprotocols = payload.get("subprotocols") or None
+
+            async with websockets.connect(
+                ws_url,
+                subprotocols=subprotocols,
+                max_size=32 * 1024 * 1024,
+                ping_interval=25,
+                ping_timeout=25,
+            ) as upstream_ws:
+                self._ide_ws_conns[stream_id] = upstream_ws
+                await tunnel_ws.send(
+                    json.dumps(
+                        {
+                            "cmd": "ide_ws_opened",
+                            "stream_id": stream_id,
+                            "subprotocol": upstream_ws.subprotocol,
+                        },
+                        ensure_ascii=False,
+                    )
+                )
+                async for frame in upstream_ws:
+                    if isinstance(frame, bytes):
+                        await tunnel_ws.send(
+                            json.dumps(
+                                {
+                                    "cmd": "ide_ws_frame",
+                                    "stream_id": stream_id,
+                                    "is_binary": True,
+                                    "data": base64.b64encode(frame).decode("ascii"),
+                                },
+                                ensure_ascii=False,
+                            )
+                        )
+                    else:
+                        await tunnel_ws.send(
+                            json.dumps(
+                                {
+                                    "cmd": "ide_ws_frame",
+                                    "stream_id": stream_id,
+                                    "is_binary": False,
+                                    "data": frame,
+                                },
+                                ensure_ascii=False,
+                            )
+                        )
+        except asyncio.CancelledError:
+            pass
+        except Exception as exc:
+            try:
+                await tunnel_ws.send(
+                    json.dumps(
+                        {"cmd": "ide_ws_close", "stream_id": stream_id, "reason": str(exc)},
+                        ensure_ascii=False,
+                    )
+                )
+            except Exception:
+                pass
+        finally:
+            self._ide_ws_conns.pop(stream_id, None)
+            self._ide_ws_tasks.pop(stream_id, None)
+            try:
+                await tunnel_ws.send(json.dumps({"cmd": "ide_ws_close", "stream_id": stream_id}))
+            except Exception:
+                pass
 
     async def start(self):
         if not self.config.expose_to_cloud or not self.config.cloud_jwt_token:
@@ -162,7 +346,9 @@ class CloudWebSocketBridge:
             ws_url = self._build_ws_url()
             hb_task: Optional[asyncio.Task] = None
             try:
-                async with websockets.connect(ws_url, ping_interval=20, ping_timeout=20) as ws:
+                async with websockets.connect(
+                    ws_url, ping_interval=20, ping_timeout=20, max_size=32 * 1024 * 1024
+                ) as ws:
                     self.connected = True
                     self.last_error = None
                     self.connected_since = datetime.now(timezone.utc).isoformat()
@@ -228,7 +414,21 @@ class CloudWebSocketBridge:
                             action = payload.get("action")
                             params = payload.get("params") or {}
                             try:
-                                result = await asyncio.to_thread(self.rpc_dispatcher, action, params)
+                                if action == "ide_ensure_started" and self.ide_mgr is not None:
+                                    status_info = await self.ide_mgr.ensure_started()
+                                    ws_name = params.get("workspace") or "."
+                                    ws_dir = (
+                                        self.workspace_resolver(ws_name)
+                                        if self.workspace_resolver
+                                        else Path(self.config.root_projects_dir)
+                                    )
+                                    result = {
+                                        **status_info,
+                                        "folder_path": self.ide_mgr.to_vscode_folder_uri_path(ws_dir),
+                                        "workspace": ws_name,
+                                    }
+                                else:
+                                    result = await asyncio.to_thread(self.rpc_dispatcher, action, params)
                                 await ws.send(
                                     json.dumps(
                                         {"cmd": "rpc_response", "call_id": call_id, "data": result},
@@ -246,6 +446,40 @@ class CloudWebSocketBridge:
                                         ensure_ascii=False,
                                     )
                                 )
+
+                        elif cmd == "ide_http_req":
+                            asyncio.create_task(self._handle_ide_http_req(ws, payload))
+
+                        elif cmd == "ide_ws_open":
+                            sid = str(payload.get("stream_id") or "")
+                            if sid:
+                                self._ide_ws_tasks[sid] = asyncio.create_task(
+                                    self._run_ide_ws_stream(ws, sid, payload)
+                                )
+
+                        elif cmd == "ide_ws_frame":
+                            sid = str(payload.get("stream_id") or "")
+                            conn = self._ide_ws_conns.get(sid)
+                            if conn:
+                                try:
+                                    if payload.get("is_binary"):
+                                        await conn.send(base64.b64decode(payload.get("data") or ""))
+                                    else:
+                                        await conn.send(str(payload.get("data") or ""))
+                                except Exception:
+                                    pass
+
+                        elif cmd == "ide_ws_close":
+                            sid = str(payload.get("stream_id") or "")
+                            t = self._ide_ws_tasks.pop(sid, None)
+                            if t:
+                                t.cancel()
+                            conn = self._ide_ws_conns.pop(sid, None)
+                            if conn:
+                                try:
+                                    await conn.close()
+                                except Exception:
+                                    pass
 
                         elif cmd == "pty_open":
                             sid = payload.get("session_id")

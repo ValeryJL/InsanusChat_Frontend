@@ -4,6 +4,7 @@ import {
   ChevronDown,
   ChevronRight,
   Code2,
+  Download,
   ExternalLink,
   FileCode2,
   FileDiff,
@@ -19,6 +20,7 @@ import {
   RefreshCw,
   Save,
   Search,
+  Sparkles,
   Square,
   TerminalSquare,
   Trash2,
@@ -118,6 +120,104 @@ export const VSCodeEditorView: React.FC<VSCodeEditorViewProps> = ({
   const editorInstanceRef = useRef<any>(null);
   const pendingJumpLineRef = useRef<number | null>(null);
   const nodeId = node?.node_id || 'local-workstation-host';
+  const isLocalDesktopNode = isDesktopRuntime() && Boolean(node?.is_local_desktop || nodeId === getLocalDaemonNodeId());
+  const canUseRealVSCode = Boolean(isLocalDesktopNode || (node && !node.is_builtin_host));
+
+  // v1.5.0: Motor Dual — VS Code Real Embebido (estilizado Obsidian) vs Monaco Lite (fallback móvil/rápido)
+  const [editorMode, setEditorMode] = useState<'vscode-real' | 'monaco-lite'>(() => {
+    if (typeof window !== 'undefined' && window.innerWidth < 768) return 'monaco-lite';
+    return canUseRealVSCode ? 'vscode-real' : 'monaco-lite';
+  });
+  const [ideUrl, setIdeUrl] = useState<string | null>(null);
+  const [ideEngineLabel, setIdeEngineLabel] = useState<string>('');
+  const [ideLoading, setIdeLoading] = useState(false);
+  const [ideError, setIdeError] = useState<string | null>(null);
+  const [ideReloadNonce, setIdeReloadNonce] = useState(0);
+  const [installingOpenVSCode, setInstallingOpenVSCode] = useState(false);
+  const [openVSCodeProgress, setOpenVSCodeProgress] = useState<{ progress: number; message: string } | null>(null);
+  const [launchingDressed, setLaunchingDressed] = useState(false);
+
+  const bootRealVSCode = useCallback(async () => {
+    if (!canUseRealVSCode) {
+      setEditorMode('monaco-lite');
+      return;
+    }
+    setIdeLoading(true);
+    setIdeError(null);
+    setIdeUrl(null);
+    try {
+      if (isLocalDesktopNode) {
+        const res = await api.startLocalIDE(workspace);
+        const payload = res?.data || res;
+        if (!payload?.ide_url) throw new Error('El daemon local no devolvió URL del motor VS Code.');
+        setIdeUrl(payload.ide_url);
+        setIdeEngineLabel(payload.engine === 'openvscode-server' ? 'OpenVSCode Server' : 'VS Code Real');
+      } else {
+        const res = await api.createRemoteIDESession(nodeId, workspace);
+        const payload = res?.data || res;
+        if (!payload?.ide_url) throw new Error('El servidor no devolvió sesión IDE remota.');
+        setIdeUrl(payload.ide_url);
+        setIdeEngineLabel(`Remoto · ${payload.engine === 'openvscode-server' ? 'OpenVSCode' : 'VS Code'}`);
+      }
+    } catch (err: any) {
+      setIdeError(err?.message || 'No se pudo iniciar el motor VS Code real');
+      setIdeUrl(null);
+    } finally {
+      setIdeLoading(false);
+    }
+  }, [canUseRealVSCode, isLocalDesktopNode, nodeId, workspace]);
+
+  useEffect(() => {
+    if (editorMode === 'vscode-real') {
+      bootRealVSCode();
+    }
+  }, [editorMode, bootRealVSCode, ideReloadNonce]);
+
+  const handleInstallOpenVSCode = async () => {
+    if (!isLocalDesktopNode || installingOpenVSCode) return;
+    setInstallingOpenVSCode(true);
+    setIdeError(null);
+    setOpenVSCodeProgress({ progress: 8, message: 'Iniciando descarga de OpenVSCode Server...' });
+
+    const pollTimer = window.setInterval(async () => {
+      try {
+        const st = await api.getLocalIDEStatus();
+        const prog = st?.data?.openvscode_install || st?.openvscode_install;
+        if (prog) {
+          setOpenVSCodeProgress({ progress: prog.progress || 10, message: prog.message || 'Descargando...' });
+        }
+      } catch {}
+    }, 800);
+
+    try {
+      await api.installOpenVSCodeServer();
+      setOpenVSCodeProgress({ progress: 100, message: 'OpenVSCode Server instalado. Iniciando...' });
+      await bootRealVSCode();
+    } catch (err: any) {
+      setIdeError(err?.message || 'Error instalando OpenVSCode Server');
+    } finally {
+      window.clearInterval(pollTimer);
+      setInstallingOpenVSCode(false);
+    }
+  };
+
+  const handleLaunchDressedEditor = async (filePath?: string, line?: number) => {
+    if (!isLocalDesktopNode) return;
+    setLaunchingDressed(true);
+    try {
+      const res = await api.launchDressedVSCode(workspace, filePath, line);
+      const ok = res?.ok ?? res?.data?.ok;
+      notify(
+        ok
+          ? 'VS Code Vestido abierto (Obsidian + Chat del Workspace)'
+          : res?.message || res?.data?.message || 'No se encontró VS Code instalado'
+      );
+    } catch (err: any) {
+      notify(err?.message || 'No se pudo abrir el Editor Vestido');
+    } finally {
+      setLaunchingDressed(false);
+    }
+  };
 
   const notify = (msg: string) => {
     setToast(msg);
@@ -220,10 +320,13 @@ export const VSCodeEditorView: React.FC<VSCodeEditorViewProps> = ({
   );
 
   useEffect(() => {
-    if (initialFilePath) {
+    if (!initialFilePath) return;
+    if (editorMode === 'vscode-real' && ideUrl) {
+      api.openFileInIDE(nodeId, workspace, initialFilePath).catch(() => {});
+    } else {
       openFileInTab(initialFilePath, initialDiff, undefined, Boolean(initialDiff));
     }
-  }, [initialFilePath, initialDiff, openFileInTab]);
+  }, [initialFilePath, initialDiff, openFileInTab, editorMode, ideUrl, nodeId, workspace]);
 
   useEffect(() => {
     onActiveFileChange?.(activeTabPath);
@@ -368,8 +471,173 @@ export const VSCodeEditorView: React.FC<VSCodeEditorViewProps> = ({
     });
 
   return (
-    <div className="flex-1 min-h-0 flex flex-col bg-[#0b0d12] text-zinc-100 overflow-hidden relative">
-      {/* FILA PRINCIPAL DEL WORKBENCH VS CODE */}
+    <div className="flex-1 min-h-0 flex flex-col bg-[#09090b] text-zinc-100 overflow-hidden relative">
+      {/* MICRO-BARRA DEL MOTOR IDE (h-8): VS Code Real Estilizado vs Monaco Lite + Botón Editor Vestido */}
+      <div className="h-8 px-2.5 bg-[#0e1017] border-b border-white/[0.07] flex items-center justify-between gap-2 text-[11px] shrink-0">
+        <div className="flex items-center gap-2 min-w-0">
+          {canUseRealVSCode && (
+            <div className="flex items-center p-0.5 rounded-md bg-[#09090b] border border-white/[0.08] shrink-0">
+              <button
+                type="button"
+                onClick={() => setEditorMode('vscode-real')}
+                className={`h-5 px-2 rounded text-[10.5px] font-medium flex items-center gap-1 transition ${
+                  editorMode === 'vscode-real'
+                    ? 'bg-emerald-500/20 text-emerald-300'
+                    : 'text-zinc-400 hover:text-zinc-200'
+                }`}
+              >
+                <Sparkles className="w-3 h-3" />
+                <span>VS Code Real</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setEditorMode('monaco-lite')}
+                className={`h-5 px-2 rounded text-[10.5px] font-medium flex items-center gap-1 transition ${
+                  editorMode === 'monaco-lite'
+                    ? 'bg-white/[0.12] text-zinc-100'
+                    : 'text-zinc-400 hover:text-zinc-200'
+                }`}
+              >
+                <Code2 className="w-3 h-3" />
+                <span>Monaco Lite</span>
+              </button>
+            </div>
+          )}
+
+          {editorMode === 'vscode-real' && ideEngineLabel && (
+            <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20 text-[10px] font-mono text-emerald-300 truncate">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+              {ideEngineLabel} · {workspace === '.' ? node?.name || 'Local' : workspace}
+            </span>
+          )}
+          {toast && <span className="text-emerald-400 font-medium truncate">{toast}</span>}
+        </div>
+
+        <div className="flex items-center gap-1.5 shrink-0">
+          {editorMode === 'vscode-real' && (
+            <button
+              type="button"
+              onClick={() => setIdeReloadNonce((n) => n + 1)}
+              className="h-6 px-2 rounded-md bg-white/[0.05] hover:bg-white/[0.10] border border-white/[0.07] text-zinc-300 flex items-center gap-1 transition"
+              title="Recargar VS Code embebido"
+            >
+              <RefreshCw className={`w-3 h-3 ${ideLoading ? 'animate-spin' : ''}`} />
+              <span className="hidden md:inline">Recargar</span>
+            </button>
+          )}
+          {isLocalDesktopNode && (
+            <button
+              type="button"
+              disabled={launchingDressed}
+              onClick={() => handleLaunchDressedEditor(activeTab?.path, activeTab ? cursorPos.line : undefined)}
+              className="h-6 px-2.5 rounded-md bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/35 text-sky-300 font-medium flex items-center gap-1.5 transition"
+              title="Abrir VS Code Desktop nativo vestido con tema Insanus Obsidian y la extensión de Chat de este workspace"
+            >
+              {launchingDressed ? (
+                <Loader2 className="w-3 h-3 animate-spin" />
+              ) : (
+                <ExternalLink className="w-3 h-3" />
+              )}
+              <span>Abrir Editor Vestido</span>
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* MODO 1: VS CODE REAL EMBEBIDO Y ESTILIZADO OBSIDIAN (con Dock de Agente a la derecha) */}
+      {editorMode === 'vscode-real' ? (
+        <div className="flex-1 min-h-0 flex overflow-hidden bg-[#09090b]">
+          <div className="flex-1 min-w-0 h-full relative bg-[#09090b]">
+            {ideLoading && !ideUrl ? (
+              <div className="h-full flex flex-col items-center justify-center gap-2.5 text-center p-6">
+                <Loader2 className="w-6 h-6 text-emerald-400 animate-spin" />
+                <div className="text-xs font-medium text-zinc-200">
+                  Iniciando VS Code Real con piel Insanus Obsidian...
+                </div>
+                <p className="text-[11px] text-zinc-500 max-w-sm">
+                  Levantando Extension Host, LSP y tema Obsidian en{' '}
+                  <span className="font-mono text-zinc-300">{workspace}</span>.
+                </p>
+              </div>
+            ) : ideError ? (
+              <div className="h-full flex flex-col items-center justify-center p-6">
+                <div className="max-w-md w-full rounded-2xl bg-[#0e1017] border border-white/[0.08] p-5 space-y-3.5 text-center">
+                  <div className="w-10 h-10 mx-auto rounded-xl bg-emerald-500/10 border border-emerald-500/25 flex items-center justify-center">
+                    <Code2 className="w-5 h-5 text-emerald-400" />
+                  </div>
+                  <div className="space-y-1">
+                    <div className="text-sm font-semibold text-zinc-100">Motor VS Code Real no disponible</div>
+                    <p className="text-xs text-zinc-400 leading-relaxed">{ideError}</p>
+                  </div>
+
+                  {installingOpenVSCode && openVSCodeProgress && (
+                    <div className="space-y-1.5 text-left">
+                      <div className="flex justify-between text-[11px] text-zinc-300 font-mono">
+                        <span className="truncate">{openVSCodeProgress.message}</span>
+                        <span>{openVSCodeProgress.progress}%</span>
+                      </div>
+                      <div className="h-1.5 rounded-full bg-white/[0.08] overflow-hidden">
+                        <div
+                          className="h-full bg-emerald-500 transition-all"
+                          style={{ width: `${openVSCodeProgress.progress}%` }}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+                    {isLocalDesktopNode && (
+                      <button
+                        type="button"
+                        disabled={installingOpenVSCode}
+                        onClick={handleInstallOpenVSCode}
+                        className="h-8 px-3.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 disabled:opacity-60 text-zinc-950 font-semibold text-xs flex items-center gap-1.5 transition"
+                      >
+                        {installingOpenVSCode ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <Download className="w-3.5 h-3.5" />
+                        )}
+                        <span>Instalar OpenVSCode Server (~80 MB)</span>
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => bootRealVSCode()}
+                      className="h-8 px-3 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] border border-white/[0.08] text-xs text-zinc-200"
+                    >
+                      Reintentar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditorMode('monaco-lite')}
+                      className="h-8 px-3 rounded-lg bg-white/[0.04] hover:bg-white/[0.09] text-xs text-zinc-400 hover:text-zinc-200"
+                    >
+                      Usar Monaco Lite
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : ideUrl ? (
+              <iframe
+                key={`${ideUrl}::${ideReloadNonce}`}
+                src={ideUrl}
+                title={`VS Code Real — ${workspace}`}
+                className="w-full h-full border-0 bg-[#09090b]"
+                allow="clipboard-read; clipboard-write"
+              />
+            ) : null}
+          </div>
+
+          {showAgentDock && agentDockSlot && (
+            <div className="hidden lg:flex w-80 xl:w-96 bg-[#0e1017] border-l border-white/[0.07] flex-col shrink-0 overflow-hidden">
+              {agentDockSlot}
+            </div>
+          )}
+        </div>
+      ) : (
+        <>
+      {/* FILA PRINCIPAL DEL WORKBENCH MONACO LITE */}
       <div className="flex-1 min-h-0 flex overflow-hidden relative">
         {/* 1. VS CODE ACTIVITY BAR (w-11) */}
         <div className="w-10 sm:w-11 bg-[#0e1017] border-r border-white/[0.07] flex flex-col items-center justify-between py-1.5 shrink-0 z-20">
@@ -653,23 +921,12 @@ export const VSCodeEditorView: React.FC<VSCodeEditorViewProps> = ({
                 {isDesktopRuntime() && (node?.is_local_desktop || nodeId === getLocalDaemonNodeId()) && (
                   <button
                     type="button"
-                    onClick={async () => {
-                      try {
-                        const res = await api.launchLocalEditor({
-                          workspace,
-                          file_path: activeTab.path,
-                          line: cursorPos.line,
-                        });
-                        notify(res?.ok ? `Abierto en editor local (${activeTab.name}:${cursorPos.line})` : res?.message || 'Editor no encontrado');
-                      } catch (err: any) {
-                        notify(err.message || 'Error abriendo VS Code Desktop');
-                      }
-                    }}
+                    onClick={() => handleLaunchDressedEditor(activeTab.path, cursorPos.line)}
                     className="h-5 px-2 rounded bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/30 text-sky-300 text-[11px] flex items-center gap-1 transition"
-                    title="Abrir este archivo en tu VS Code / VSCodium Desktop en la línea actual"
+                    title="Abrir este archivo en tu Editor Vestido (VS Code Obsidian + Chat del Workspace)"
                   >
                     <ExternalLink className="w-3 h-3" />
-                    <span className="hidden md:inline">VS Code</span>
+                    <span className="hidden md:inline">Editor Vestido</span>
                   </button>
                 )}
 
@@ -1019,6 +1276,8 @@ export const VSCodeEditorView: React.FC<VSCodeEditorViewProps> = ({
           )}
         </div>
       </footer>
+        </>
+      )}
     </div>
   );
 };

@@ -1,6 +1,6 @@
 [package]
 name = "insanus-harnes"
-version = "1.4.2"
+version = "1.5.0"
 description = "insanus-harnes — Desktop App (Windows & Linux) con Microservicio Local VS Code y Control Remoto estilo Antigravity"
 authors = ["Valeria Jauregui Lorda"]
 edition = "2021"

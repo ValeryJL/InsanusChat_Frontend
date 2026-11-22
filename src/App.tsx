@@ -58,6 +58,7 @@ import {
 import { MarkdownRenderer } from './components/MarkdownRenderer';
 import { TreeGraphView } from './components/TreeGraphView';
 import { StudioView } from './components/StudioView';
+import { ProjectChatSidebar } from './components/ProjectChatSidebar';
 import { AdminView } from './components/AdminView';
 import { SettingsView } from './components/SettingsView';
 import { EnvironmentPopover } from './components/EnvironmentPopover';
@@ -641,6 +642,57 @@ export const App: React.FC = () => {
         setMobileSidebarOpen(false);
       }
     } catch {}
+  };
+
+  const handleCreateChatInProject = async (
+    nodeId: string | null,
+    workspacePath: string,
+    openEditor = false
+  ) => {
+    try {
+      const defaultAgent = agents.find((a) => a.active) || agents[0];
+      const isWs = Boolean(nodeId);
+      const label =
+        workspacePath && workspacePath !== '.'
+          ? workspacePath.replace(/[\\/]+$/, '').split(/[\\/]/).pop() || workspacePath
+          : 'Proyecto';
+      const res = await api.createChat({
+        title: isWs ? `${label} · Nuevo chat` : 'Nueva conversación',
+        agent_id: defaultAgent?._id || null,
+        execution_target: isWs ? 'workstation' : 'cloud',
+        node_id: nodeId,
+        workspace_path: workspacePath || '.',
+        harness_mode: localStatus?.config?.default_harness_mode || 'auto_edit',
+      });
+      if (res?.data) {
+        setMessages([]);
+        setSelectedChildByParent({});
+        setBranchTarget(null);
+        setFocusedMsgId(null);
+        setChats((prev) => [res.data, ...prev]);
+        setActiveChatId(res.data._id);
+        setMainSection('chat');
+        setWorkspaceViewMode(isWs && openEditor ? 'vscode' : 'agent');
+        setMobileSidebarOpen(false);
+      }
+    } catch (err: any) {
+      console.error('Error creando chat en proyecto:', err);
+    }
+  };
+
+  const handleOpenProjectEditor = (
+    nodeId: string | null,
+    workspacePath: string,
+    existingChat?: ChatItem
+  ) => {
+    if (existingChat) {
+      setActiveChatId(existingChat._id);
+      setMainSection('chat');
+      setWorkspaceViewMode('vscode');
+      setMobileSidebarOpen(false);
+    } else {
+      handleCreateChatInProject(nodeId, workspacePath, true);
+    }
   };
 
   const handleDeleteChat = async (chatIdToDelete: string, e?: React.MouseEvent) => {
@@ -1317,7 +1369,7 @@ export const App: React.FC = () => {
               <div className="leading-none">
                 <div className="font-semibold text-[13.5px] text-zinc-100">insanus-harnes</div>
                 <div className="text-[10px] text-zinc-500 font-mono mt-0.5">
-                  {isDesktop ? 'v1.4.2 · Desktop' : 'v1.4.2 · harnes.insanustech.com.ar'}
+                  {isDesktop ? 'v1.5.0 · Desktop' : 'v1.5.0 · harnes.insanustech.com.ar'}
                 </div>
               </div>
             </div>
@@ -1430,57 +1482,24 @@ export const App: React.FC = () => {
           </nav>
         </div>
 
-        {/* Lista de Conversaciones */}
-        <div className="flex-1 overflow-y-auto px-2.5 space-y-0.5">
-          <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
-            Recientes
-          </div>
-          {chats.map((c) => {
-            const active = activeChatId === c._id && mainSection === 'chat';
-            return (
-              <div
-                key={c._id}
-                onClick={() => {
-                  setActiveChatId(c._id);
-                  setMainSection('chat');
-                  if (c.execution_target !== 'workstation') {
-                    setWorkspaceViewMode('agent');
-                  }
-                  setMobileSidebarOpen(false);
-                }}
-                className={`group h-8 flex items-center justify-between px-2.5 rounded-lg cursor-pointer text-xs transition ${
-                  active
-                    ? 'bg-white/[0.09] text-zinc-50 font-medium'
-                    : 'text-zinc-400 hover:bg-white/[0.04] hover:text-zinc-200'
-                }`}
-              >
-                <div
-                  className="truncate pr-1.5 flex items-center gap-2 min-w-0"
-                  title={
-                    c.execution_target === 'workstation'
-                      ? `Equipo local: ${c.workspace_path || '.'}`
-                      : 'Chat en la Nube'
-                  }
-                >
-                  {c.execution_target === 'workstation' ? (
-                    <Laptop className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                  ) : (
-                    <Cloud className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
-                  )}
-                  <span className="truncate">{c.title || 'Nueva conversación'}</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={(e) => handleDeleteChat(c._id, e)}
-                  className="opacity-70 md:opacity-0 md:group-hover:opacity-100 p-1 rounded hover:bg-rose-500/15 text-zinc-500 hover:text-rose-400 transition shrink-0"
-                  title="Eliminar chat"
-                >
-                  <Trash2 className="w-3 h-3" />
-                </button>
-              </div>
-            );
-          })}
-        </div>
+        {/* Lista de Conversaciones Agrupadas por Proyecto (estilo Antigravity) */}
+        <ProjectChatSidebar
+          chats={chats}
+          nodes={nodes}
+          activeChatId={activeChatId}
+          mainSection={mainSection}
+          onSelectChat={(c) => {
+            setActiveChatId(c._id);
+            setMainSection('chat');
+            if (c.execution_target !== 'workstation') {
+              setWorkspaceViewMode('agent');
+            }
+            setMobileSidebarOpen(false);
+          }}
+          onDeleteChat={handleDeleteChat}
+          onCreateChatInProject={handleCreateChatInProject}
+          onOpenProjectEditor={handleOpenProjectEditor}
+        />
 
         {/* Footer Usuario */}
         <div className="p-3 border-t border-white/[0.07] flex items-center justify-between gap-2">

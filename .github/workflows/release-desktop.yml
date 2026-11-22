@@ -7,9 +7,9 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: 'Tag del release (ej. v1.4.2)'
+        description: 'Tag del release (ej. v1.5.0)'
         required: false
-        default: 'v1.4.2'
+        default: 'v1.5.0'
 
 permissions:
   contents: write
@@ -69,6 +69,12 @@ jobs:
         with:
           workspaces: './src-tauri -> target'
 
+      - name: Generate Obsidian Icons, VS Code Extensions & Build Frontend
+        run: |
+          python scripts/generate-icons.py
+          npm install
+          npm run build
+
       - name: Build & Test Workstation Local Sidecar (PyInstaller)
         env:
           TAURI_TARGET_TRIPLE: ${{ matrix.target_triple }}
@@ -77,12 +83,6 @@ jobs:
           pip install -r workstation-daemon/requirements.txt
           pytest -v workstation-daemon/tests/test_daemon.py
           python workstation-daemon/build_sidecar.py
-
-      - name: Generate Obsidian Icons & Build Frontend + Offline Monaco
-        run: |
-          python scripts/generate-icons.py
-          npm install
-          npm run build
 
       - name: Build Tauri v2 Desktop Installers (${{ matrix.bundles }})
         run: |
@@ -123,7 +123,7 @@ jobs:
           if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
             echo "name=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
           else
-            echo "name=${{ github.event.inputs.release_tag || 'v1.4.2' }}" >> "$GITHUB_OUTPUT"
+            echo "name=${{ github.event.inputs.release_tag || 'v1.5.0' }}" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Publish GitHub Release

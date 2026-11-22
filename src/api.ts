@@ -462,6 +462,62 @@ export const api = {
           method: 'DELETE',
         }),
 
+  // v1.5.0: Motor VS Code Real Embebido, Editor Vestido, Diagnósticos LSP y Resolución de Chat por Workspace
+  resolveWorkspaceChat: (nodeId: string | null, workspacePath: string, title?: string, createIfMissing = true) =>
+    request('/api/v1/chats/resolve-workspace', {
+      method: 'POST',
+      body: JSON.stringify({
+        node_id: nodeId,
+        workspace_path: workspacePath || '.',
+        title,
+        create_if_missing: createIfMissing,
+      }),
+    }),
+  getLocalIDEStatus: () => localDaemonRequest('/local/ide/status'),
+  startLocalIDE: (workspace = '.') =>
+    localDaemonRequest('/local/ide/start', {
+      method: 'POST',
+      body: JSON.stringify({ workspace }),
+    }),
+  stopLocalIDE: () => localDaemonRequest('/local/ide/stop', { method: 'POST' }),
+  installOpenVSCodeServer: () =>
+    localDaemonRequest('/local/ide/install-openvscode', { method: 'POST' }),
+  launchDressedVSCode: (workspace = '.', filePath?: string, line?: number, forceReinstall = false) =>
+    localDaemonRequest('/local/ide/launch-dressed', {
+      method: 'POST',
+      body: JSON.stringify({
+        workspace,
+        file_path: filePath || null,
+        line: line || null,
+        force_reinstall: forceReinstall,
+      }),
+    }),
+  reinstallDressedProfile: () =>
+    localDaemonRequest('/local/ide/reinstall-profile', { method: 'POST' }),
+  createRemoteIDESession: (nodeId: string, workspace = '.') =>
+    request(`/api/v1/nodes/${encodeURIComponent(nodeId)}/ide/session`, {
+      method: 'POST',
+      credentials: 'include',
+      body: JSON.stringify({ workspace }),
+    }),
+  openFileInIDE: (nodeId: string, workspace: string, path: string, line?: number) =>
+    shouldRouteDirectToLocalDaemon(nodeId)
+      ? localDaemonRequest('/local/ide/open-file', {
+          method: 'POST',
+          body: JSON.stringify({ workspace, path, line }),
+        })
+      : request(`/api/v1/nodes/${encodeURIComponent(nodeId)}/ide/open-file`, {
+          method: 'POST',
+          body: JSON.stringify({ workspace, path, line }),
+        }),
+  getIDEDiagnostics: (nodeId: string, workspace = '.', path?: string) => {
+    const qs = new URLSearchParams({ workspace });
+    if (path) qs.set('path', path);
+    return shouldRouteDirectToLocalDaemon(nodeId)
+      ? localDaemonRequest(`/local/ide/diagnostics?${qs.toString()}`)
+      : request(`/api/v1/nodes/${encodeURIComponent(nodeId)}/ide/diagnostics?${qs.toString()}`);
+  },
+
   // GitHub Releases del Instalador Desktop (HU-44)
   fetchLatestDesktopRelease: async (): Promise<DesktopReleaseInfo | null> => {
     try {

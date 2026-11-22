@@ -75,16 +75,19 @@ class WorkstationConfig:
     terminal_blocked_patterns: List[str] = field(default_factory=list)
     default_shell: str = "auto"  # auto | powershell | pwsh | cmd | bash | zsh
 
-    # HU-39: Integración adaptada de VS Code / VSCodium / InsanusCode
+    # HU-39 / v1.5: Integración real de VS Code embebido (serve-web / OpenVSCode) y Editor Vestido
     preferred_editor: str = "auto"  # auto | insanus-code | code | codium | code-insiders | cursor | custom
     custom_editor_path: Optional[str] = None
     sync_cli_extensions: bool = True
+    ide_engine: str = "auto"  # auto | vscode | openvscode | monaco
+    dressed_share_user_extensions: bool = True
+    ide_embedded_hide_titlebar: bool = True
 
     # Conexión Cloud & SSOT Sync
     cloud_backend_url: str = field(default_factory=lambda: os.environ.get("CLOUD_BACKEND_URL", "https://harnes.insanustech.com.ar"))
     cloud_jwt_token: Optional[str] = None
     config_version: int = 1
-    app_version: str = "1.4.2"
+    app_version: str = "1.5.0"
 
     # Preferencias Desktop (Tauri)
     minimize_to_tray: bool = True
@@ -116,6 +119,9 @@ class WorkstationConfig:
             "preferred_editor": self.preferred_editor,
             "custom_editor_path": self.custom_editor_path,
             "sync_cli_extensions": self.sync_cli_extensions,
+            "ide_engine": self.ide_engine,
+            "dressed_share_user_extensions": self.dressed_share_user_extensions,
+            "ide_embedded_hide_titlebar": self.ide_embedded_hide_titlebar,
             "default_shell": self.default_shell,
             "config_version": self.config_version,
         }
@@ -150,6 +156,12 @@ class WorkstationConfig:
             self.custom_editor_path = str(cep).strip() if cep else None
         if "sync_cli_extensions" in policy:
             self.sync_cli_extensions = bool(policy["sync_cli_extensions"])
+        if "ide_engine" in policy and policy["ide_engine"] in ("auto", "vscode", "openvscode", "monaco"):
+            self.ide_engine = str(policy["ide_engine"])
+        if "dressed_share_user_extensions" in policy:
+            self.dressed_share_user_extensions = bool(policy["dressed_share_user_extensions"])
+        if "ide_embedded_hide_titlebar" in policy:
+            self.ide_embedded_hide_titlebar = bool(policy["ide_embedded_hide_titlebar"])
         if "default_shell" in policy and policy["default_shell"]:
             self.default_shell = str(policy["default_shell"]).strip()
         if "config_version" in policy:
@@ -172,6 +184,7 @@ class WorkstationConfig:
                 valid_keys = {f.name for f in cls.__dataclass_fields__.values()}
                 filtered = {k: v for k, v in raw.items() if k in valid_keys}
                 cfg = cls(**filtered)
+                cfg.app_version = "1.5.0"
                 if os.environ.get("INSANUS_BIND_PORT"):
                     cfg.bind_port = int(os.environ["INSANUS_BIND_PORT"])
                 return cfg

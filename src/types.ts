@@ -127,8 +127,35 @@ export interface WorkstationPolicy {
   preferred_editor: string;
   custom_editor_path?: string | null;
   sync_cli_extensions: boolean;
+  ide_engine?: 'auto' | 'vscode' | 'openvscode' | 'monaco';
+  dressed_share_user_extensions?: boolean;
+  ide_embedded_hide_titlebar?: boolean;
   default_shell: string;
   config_version: number;
+}
+
+export interface LocalIDEStatus {
+  running: boolean;
+  engine?: string | null;
+  port?: number | null;
+  pid?: number | null;
+  started_at?: string | null;
+  last_error?: string | null;
+  configured_engine: 'auto' | 'vscode' | 'openvscode' | 'monaco' | string;
+  vscode_cli_available: boolean;
+  vscode_cli_path?: string | null;
+  openvscode_installed: boolean;
+  openvscode_install?: {
+    status: 'idle' | 'downloading' | 'extracting' | 'ready' | 'error' | string;
+    progress: number;
+    message: string;
+    version?: string | null;
+  };
+  dressed_share_user_extensions: boolean;
+  bundled_extensions: string[];
+  bundled_vsix: string[];
+  session_secret?: string;
+  base_path?: string;
 }
 
 export interface DetectedEditorItem {
@@ -162,6 +189,9 @@ export interface LocalDaemonStatus {
     preferred_editor: string;
     custom_editor_path?: string | null;
     sync_cli_extensions: boolean;
+    ide_engine?: 'auto' | 'vscode' | 'openvscode' | 'monaco';
+    dressed_share_user_extensions?: boolean;
+    ide_embedded_hide_titlebar?: boolean;
     cloud_backend_url: string;
     has_cloud_token: boolean;
     config_version: number;
@@ -190,6 +220,7 @@ export interface LocalDaemonStatus {
     sync_cli_extensions: boolean;
     installed_extensions_count: number;
   };
+  ide?: LocalIDEStatus;
   pid: number;
   port: number;
 }

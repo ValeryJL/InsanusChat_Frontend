@@ -1,0 +1,26 @@
+{
+  "name": "insanus-obsidian-theme",
+  "displayName": "Insanus Obsidian Theme",
+  "description": "Tema oscuro oficial de insanus-harnes (Obsidian #09090b / #0e1017 / Emerald #10b981) diseñado para fusionar Visual Studio Code con la interfaz de insanus-harnes.",
+  "version": "1.5.0",
+  "publisher": "insanustech",
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": [
+    "Themes"
+  ],
+  "extensionKind": [
+    "ui",
+    "workspace"
+  ],
+  "contributes": {
+    "themes": [
+      {
+        "label": "Insanus Obsidian",
+        "uiTheme": "vs-dark",
+        "path": "./themes/insanus-obsidian-color-theme.json"
+      }
+    ]
+  }
+}

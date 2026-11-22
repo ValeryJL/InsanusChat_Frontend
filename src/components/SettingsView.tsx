@@ -869,8 +869,159 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   </button>
                 </div>
 
-                <div className="p-3.5 rounded-xl bg-[#09090b] border border-white/[0.07] text-xs text-zinc-400 leading-relaxed">
-                  Al abrir un archivo desde el Editor integrado con el botón <strong className="text-sky-300">VS Code</strong>, se lanza tu editor nativo posicionado en el archivo y línea exactos (<code className="text-emerald-400">--goto archivo:línea</code>) para usar todas tus extensiones locales reales.
+                <div className="p-4 rounded-xl bg-[#09090b] border border-white/[0.08] space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <div className="text-xs font-semibold text-zinc-100">Motor del Editor Embebido (v1.5)</div>
+                      <div className="text-[11px] text-zinc-500 mt-0.5">
+                        Ejecuta VS Code real con Extension Host, LSP y tema Insanus Obsidian dentro de la pestaña Editor.
+                      </div>
+                    </div>
+                    <span
+                      className={`px-2 py-0.5 rounded-full text-[10px] font-mono ${
+                        localStatus?.ide?.running
+                          ? 'bg-emerald-500/15 text-emerald-300'
+                          : 'bg-zinc-800 text-zinc-400'
+                      }`}
+                    >
+                      {localStatus?.ide?.running
+                        ? `ACTIVO · ${localStatus.ide.engine} (:${localStatus.ide.port})`
+                        : 'EN ESPERA'}
+                    </span>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    {(
+                      [
+                        { id: 'auto', label: 'Automático' },
+                        { id: 'vscode', label: 'VS Code (serve-web)' },
+                        { id: 'openvscode', label: 'OpenVSCode Server' },
+                        { id: 'monaco', label: 'Solo Monaco Lite' },
+                      ] as const
+                    ).map((opt) => (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        onClick={() =>
+                          applyLocalAndBackendPatch({ ide_engine: opt.id }, `Motor IDE: ${opt.label}`)
+                        }
+                        className={`h-7 px-2.5 rounded-lg text-[11px] border transition ${
+                          (cfg.ide_engine || 'auto') === opt.id
+                            ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300'
+                            : 'bg-[#11131a] border-white/[0.08] text-zinc-400 hover:text-zinc-200'
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+                    <label className="flex items-start gap-2.5 p-2.5 rounded-lg bg-[#11131a] border border-white/[0.07] cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={cfg.dressed_share_user_extensions !== false}
+                        onChange={(e) =>
+                          applyLocalAndBackendPatch(
+                            { dressed_share_user_extensions: e.target.checked },
+                            e.target.checked
+                              ? 'Editor Vestido compartirá ~/.vscode/extensions'
+                              : 'Editor Vestido usará carpeta de extensiones aislada'
+                          )
+                        }
+                        className="mt-0.5 accent-emerald-500"
+                      />
+                      <span className="text-[11px] text-zinc-300 leading-snug">
+                        <strong className="block text-zinc-100">Compartir extensiones personales</strong>
+                        Hereda tus extensiones de <code className="text-emerald-400">~/.vscode/extensions</code> al abrir Editor Vestido.
+                      </span>
+                    </label>
+
+                    <label className="flex items-start gap-2.5 p-2.5 rounded-lg bg-[#11131a] border border-white/[0.07] cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={cfg.ide_embedded_hide_titlebar !== false}
+                        onChange={(e) =>
+                          applyLocalAndBackendPatch(
+                            { ide_embedded_hide_titlebar: e.target.checked },
+                            'Estilo embebido actualizado'
+                          )
+                        }
+                        className="mt-0.5 accent-emerald-500"
+                      />
+                      <span className="text-[11px] text-zinc-300 leading-snug">
+                        <strong className="block text-zinc-100">Ocultar barra de título duplicada</strong>
+                        Fusiona el VS Code embebido directamente bajo el header Obsidian de insanus-harnes.
+                      </span>
+                    </label>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          const res = await api.launchDressedVSCode('.');
+                          notify(res?.ok ? 'Editor Vestido abierto (Obsidian + Chat)' : res?.message || 'Error');
+                        } catch (err: any) {
+                          notify(err?.message || 'Error abriendo Editor Vestido');
+                        }
+                      }}
+                      className="h-7 px-3 rounded-lg bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/35 text-sky-300 text-[11px] font-medium flex items-center gap-1.5"
+                    >
+                      <ExternalLink className="w-3 h-3" />
+                      <span>Abrir Editor Vestido</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          await api.reinstallDressedProfile();
+                          notify('Tema Insanus Obsidian y Extensión de Chat reinstalados');
+                          await onRefreshLocalStatus();
+                        } catch (err: any) {
+                          notify(err?.message || 'No se pudo reinstalar el perfil');
+                        }
+                      }}
+                      className="h-7 px-3 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] border border-white/[0.08] text-zinc-200 text-[11px]"
+                    >
+                      Reinstalar Tema + Extensión Chat
+                    </button>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          notify('Descargando OpenVSCode Server (~80 MB)...');
+                          await api.installOpenVSCodeServer();
+                          notify('OpenVSCode Server instalado correctamente');
+                          await onRefreshLocalStatus();
+                        } catch (err: any) {
+                          notify(err?.message || 'Error descargando OpenVSCode Server');
+                        }
+                      }}
+                      className="h-7 px-3 rounded-lg bg-white/[0.05] hover:bg-white/[0.10] border border-white/[0.08] text-zinc-300 text-[11px] flex items-center gap-1"
+                    >
+                      <Download className="w-3 h-3 text-emerald-400" />
+                      <span>
+                        {localStatus?.ide?.openvscode_installed
+                          ? 'Actualizar OpenVSCode Server'
+                          : 'Instalar OpenVSCode Server'}
+                      </span>
+                    </button>
+                    {localStatus?.ide?.running && (
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          await api.stopLocalIDE();
+                          notify('Motor VS Code detenido');
+                          await onRefreshLocalStatus();
+                        }}
+                        className="h-7 px-2.5 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-rose-300 text-[11px]"
+                      >
+                        Detener Motor
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
 
